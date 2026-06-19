@@ -7,8 +7,8 @@
 
 A TypeScript library exposed as both a **CLI** (`arxiv`) and an **MCP server** (`arxiv-mcp`)
 for searching arXiv, fetching metadata, and reading papers (HTML → Markdown, with PDF
-fallback) — built API-first on arXiv's official endpoints, with an optional, deferred browser
-fallback behind a swappable interface.
+fallback) — built API-first on arXiv's official endpoints, with a browser fallback behind a
+swappable interface (off by default, used only when the official endpoints fail).
 
 All technical specifics were verified against live sources on 2026-06-19 (see
 [§20 References](#20-references)); library versions are the latest published as of that date.
@@ -38,8 +38,9 @@ ambiguity, scope, technical correctness).
 - **Bulk harvesting** (OAI-PMH, AWS S3 `s3://arxiv`, Kaggle) — README pointers only ([§5.4](#54-bulk-access-pointers-out-of-scope)).
 - **Writing/submitting to arXiv** — read-only.
 - **Long-running daemon / HTTP MCP transport** — stdio only for v1.
-- **Runtime browser scraping in the default install** — the `DataSource` seam exists, but the
-  browser implementation is deferred and optional ([§17](#17-implementation-phases-for-the-plan)).
+- **Browser scraping as the *primary* data path** — the browser fallback is a secondary path
+  behind the `DataSource` seam, **off by default**, used only when the official endpoints fail
+  ([§7.2](#72-read-full-text)).
 
 ## 3. Architecture
 
@@ -59,19 +60,19 @@ ambiguity, scope, technical correctness).
         ▼             ▼               ▼              ▼
    DataSource     cache.ts       rate-limit.ts    parse/*
    (interface)   (fs + TTL)     (min-interval)   (atom/html/pdf)
-   └─ ApiDataSource (official endpoints — the only implementation shipped in v1)
-      (BrowserDataSource is a deferred, optional implementation of the same interface — §17)
+   ├─ ApiDataSource     (official endpoints — default)
+   └─ BrowserDataSource (lazy playwright-core — fallback, off by default)
 ```
 
 **Rule:** `core` has no dependency on `commander` or the MCP SDK. Adapters depend only on
 `ArxivClient`'s public surface. The `DataSource` interface is the single seam where the data
-source is chosen; v1 ships only `ApiDataSource`.
+source is chosen; v1 ships both `ApiDataSource` (default) and `BrowserDataSource` (fallback).
 
-> **On the "browser fallback":** the seam is kept (cheap, future-proof), but the runtime browser
-> implementation (`BrowserDataSource`, lazy `playwright-core`) is **deferred to an optional
-> post-v1 phase** — the official endpoints cover every v1 capability, so the fallback is not on
-> the critical path. When implemented, it fetches the **same** native/ar5iv/PDF URLs and reuses
-> the existing parsers, emitting the same `PaperContent.source` values (no new enum value). The
+> **On the "browser fallback":** `BrowserDataSource` (lazy-imported `playwright-core`) is **off by
+> default** and engaged only when `ApiDataSource` fails for a non-content reason (see [§7.2](#72-read-full-text)).
+> It fetches the **same** native/ar5iv/PDF/abs URLs and reuses the existing parsers, emitting the
+> same `PaperContent.source` values (no new enum value). If no browser binary is available it
+> degrades gracefully (clear error with install guidance) and never breaks the API path. The
 > browsirai / chrome-devtools MCP servers were design-time investigation aids only, not runtime
 > dependencies.
 
@@ -98,8 +99,8 @@ arxiv-toolkit/
 │  │  ├─ bibtex.ts              # fetch canonical + generate @misc fallback
 │  │  ├─ datasource/
 │  │  │  ├─ datasource.ts       # DataSource interface
-│  │  │  └─ api.ts              # ApiDataSource (the v1 implementation)
-│  │  │  # browser.ts           # DEFERRED (optional, post-v1) — see §17
+│  │  │  ├─ api.ts              # ApiDataSource (default)
+│  │  │  └─ browser.ts          # BrowserDataSource (lazy playwright-core — fallback, off by default)
 │  │  └─ parse/
 │  │     ├─ atom.ts             # Atom feed → Paper[] + paging info
 │  │     ├─ html-native.ts      # arxiv.org/html (ltx_* schema) → sections
@@ -197,6 +198,7 @@ interface ArxivConfig {
   contact?: string;           // mailto used to build UA if userAgent not overridden
   noCache: boolean;           // default false
   defaultMaxResults: number;  // default 25 (from ARXIV_MAX_RESULTS); the 2000 clamp is a fixed constant, not this
+  browserFallback: boolean;   // default false — engage BrowserDataSource when ApiDataSource fails (§7.2)
 }
 ```
 
@@ -332,6 +334,14 @@ class ArxivClient {
     miss, transparent to the caller).
   - `nextCursor` is the **authoritative** "more remains" signal: present iff more sections
     follow. `truncated` is `true` iff the read was returned in chunks at all.
+- **Browser fallback** (`config.browserFallback`, `--browser`, `ARXIV_BROWSER=1`; default off):
+  when enabled, a `BrowserDataSource` (lazy `playwright-core`) retries the **same** URL after
+  `ApiDataSource` fails for a **non-content** reason — a non-retryable block (e.g. `403`/challenge),
+  or repeated `5xx`/connection/TLS failure after retries are exhausted. It is **not** triggered by
+  a clean `404` (that is a legitimate "not available here" → continue the source matrix). The
+  browser loads the page, hands the rendered HTML/PDF bytes to the same parsers, and yields the
+  same `source` value. If no browser binary is installed, it raises `UnsupportedError` with
+  install guidance and the API path is unaffected.
 
 ### 7.3 Metadata & export
 - `getPaper`/`getPapers`: Query API via `id_list` → `Paper`.
@@ -402,7 +412,8 @@ class ArxivClient {
 - **Env vars → `ArxivConfig` fields:** `ARXIV_CACHE_DIR`→`cacheDir`, `ARXIV_DOWNLOADS_DIR`→
   `downloadsDir`, `ARXIV_RATE_MS`→`rateMs`, `ARXIV_USER_AGENT`→`userAgent`, `ARXIV_CONTACT`→
   `contact`, `ARXIV_NO_CACHE`→`noCache`, `ARXIV_MAX_RESULTS`→`defaultMaxResults` (the value used
-  when `maxResults` is omitted; **distinct** from the fixed 2000 clamp and arXiv's own default of 10).
+  when `maxResults` is omitted; **distinct** from the fixed 2000 clamp and arXiv's own default of 10),
+  `ARXIV_BROWSER`→`browserFallback`.
 - On every download, **print the absolute saved path**.
 
 ## 11. Error handling (`core/errors.ts`)
@@ -426,7 +437,7 @@ class ArxivClient {
 | `arxiv recent <category>` | latest in a category | `--max --json` |
 | `arxiv cache <clear\|path>` | cache maintenance (CLI-only by design — see §13) | — |
 
-- Global: `--json`, `--no-cache`, `--cache-dir`, `--quiet/--verbose`.
+- Global: `--json`, `--no-cache`, `--cache-dir`, `--browser`, `--quiet/--verbose`.
 - `arxiv download <id...>` loops `client.download(id)` per ID, printing each absolute path;
   **continue-on-error** (a failed ID is reported to stderr and processing continues); the process
   exits non-zero if any ID failed (exit code = the first failure's code from §11).
@@ -471,9 +482,10 @@ schemas are zod raw shapes (`{ field: z.… }`). Data tools declare `outputSchem
 | CLI | `commander` | ^15.0.0 | ESM, small, first-class subcommands |
 | Build | `tsdown` | ^0.22.3 | tsup's maintained successor; ESM, dts, multi-entry; native bin **shebang** handling. **engines `^22.18 \|\| >=24.11`** |
 | Test | `vitest` | ^4.1.9 | fake timers for the rate limiter; fixture-based parser tests |
+| Browser fallback | `playwright-core` | latest | **optionalDependency**, lazy-loaded; engaged only when `ApiDataSource` fails (§7.2); off by default. Uses an already-installed Chromium/Chrome if present. |
 
 *Not in v1 (future/optional):* `pdfjs-dist` (only if coordinate-level PDF extraction is ever
-needed — `unpdf` covers v1 text); `playwright-core` (only if `BrowserDataSource` is implemented, §17).
+needed — `unpdf` covers v1 text).
 
 ## 15. Testing strategy (TDD — tests first, per superpowers)
 
@@ -539,10 +551,11 @@ before the full surface lands.
    CLI shippable increment.**
 9. **MCP adapter** — tools, zod schemas, `structuredContent`, `resource_link` + tests. **▶ MCP
    shippable increment.**
-10. **Packaging & docs** — bins, README (install, usage, MCP registration), integration pass.
-11. **(Optional, deferred) Browser fallback** — `BrowserDataSource` (lazy `playwright-core`) behind
-    the existing `DataSource` seam, reusing the parsers. Implement only if a concrete API gap
-    appears; not required for v1.
+10. **Browser fallback** — `BrowserDataSource` (lazy `playwright-core`) behind the existing
+    `DataSource` seam, reusing the parsers; wire `browserFallback`/`--browser`/`ARXIV_BROWSER` and
+    graceful degradation when no browser binary is present + tests.
+11. **Packaging & docs** — bins, README (install, usage, MCP registration, browser-fallback note),
+    integration pass.
 
 ## 18. Risks & mitigations
 
@@ -554,14 +567,17 @@ before the full surface lands.
 - **arXiv 5xx / undocumented limits** → 3 s per-host limiter + backoff + caching.
 - **MCP SDK v2 churn** (stable ~Q3 2026) → pin v1.x; plan a later migration.
 - **Build/runtime Node split** (tsdown ≥ 22.18 vs runtime ≥ 20.19) → documented in §14/§16; CI uses ≥ 22.18.
+- **Browser binary availability** (`playwright-core` needs an installed browser) → off by default;
+  on first use without a browser, raise `UnsupportedError` with install guidance and leave the API
+  path unaffected.
 - **Large papers blowing LLM context** → mandatory section-granular chunking via `section`/`maxChars`/`cursor`.
 
-## 19. Open decision for the user
+## 19. Resolved decisions
 
-- **Browser fallback scope.** The review flags `BrowserDataSource` as YAGNI for v1 (off-by-default,
-  no capability the official endpoints lack). This spec keeps the `DataSource` seam but **defers**
-  the browser implementation to optional phase 11 and drops `playwright-core` from the core deps.
-  Confirm this is acceptable, or say if you want the browser fallback built within v1 proper.
+- **Browser fallback is in v1** (user decision, 2026-06-19). The review flagged it as YAGNI, but it
+  is included: `BrowserDataSource` ships behind the `DataSource` seam, **off by default**, engaged
+  only when `ApiDataSource` fails for a non-content reason (§7.2). `playwright-core` is an
+  `optionalDependency`, lazy-loaded, with graceful degradation when no browser is installed.
 
 ## 20. References
 
