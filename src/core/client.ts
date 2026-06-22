@@ -4,8 +4,8 @@ import { Cache } from "./cache.js";
 import { Http } from "./http.js";
 import { ApiDataSource } from "./datasource/api.js";
 import { parseFeed } from "./parse/atom.js";
-import { normalizeId } from "./ids.js";
-import { NotFoundError, ParseError } from "./errors.js";
+import { normalizeId, htmlUrl, ar5ivUrl, pdfUrl, absUrl, filenameFor } from "./ids.js";
+import { NotFoundError, ParseError, UnsupportedError, NetworkError } from "./errors.js";
 import type { DataSource } from "./datasource/datasource.js";
 import type {
   ArxivConfig,
@@ -15,7 +15,14 @@ import type {
   PaperContent,
   ReadOptions,
   DownloadOptions,
+  Section,
+  NormalizedId,
 } from "./types.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { parseNativeHtml } from "./parse/html-native.js";
+import { parseAr5ivHtml } from "./parse/html-ar5iv.js";
+import { parsePdf } from "./parse/pdf.js";
 
 const API_QUERY_URL = "https://export.arxiv.org/api/query";
 const MAX_RESULTS_CLAMP = 2000;
@@ -141,10 +148,303 @@ export class ArxivClient {
     });
   }
 
+  // ---- Phase 6 helpers (content extraction, fallback, cursor) ----
+
+  private contentTtl(n: NormalizedId): number {
+    return n.version !== undefined ? Infinity : 24 * 60 * 60 * 1000;
+  }
+
+  /** Full extracted content for one resolved source (the cache value shape). */
+  private async extractContent(
+    n: NormalizedId,
+    source: "auto" | "html" | "pdf",
+  ): Promise<{
+    source: "html-native" | "html-ar5iv" | "pdf";
+    title: string;
+    abstract?: string;
+    sections: Section[];
+    warnings: string[];
+  }> {
+    const warnings: string[] = [];
+
+    const tryNative = async () => {
+      const html = await this.api.getHtml(htmlUrl(n)); // null on 404
+      if (html === null) return null;
+      const parsed = parseNativeHtml(html);
+      if (parsed.sections.length === 0) return null; // unexpected page => fall through
+      return {
+        source: "html-native" as const,
+        title: parsed.title,
+        abstract: parsed.abstract,
+        sections: parsed.sections,
+      };
+    };
+
+    const tryAr5iv = async () => {
+      let html: string | null;
+      try {
+        html = await this.api.getHtml(ar5ivUrl(n)); // null on 404
+      } catch (err) {
+        if (err instanceof NetworkError) return null; // network => fall through to PDF
+        throw err;
+      }
+      if (html === null) return null;
+      const parsed = parseAr5ivHtml(html);
+      if (parsed.sections.length === 0) return null; // 200-with-zero-sections => fall through
+      warnings.push("ar5iv fallback used");
+      return {
+        source: "html-ar5iv" as const,
+        title: parsed.title,
+        abstract: parsed.abstract,
+        sections: parsed.sections,
+      };
+    };
+
+    const tryPdf = async () => {
+      const bytes = await this.api.getPdf(pdfUrl(n)); // throws NotFoundError on 404
+      const parsed = await parsePdf(bytes);
+      warnings.push(parsed.warning);
+      return {
+        source: "pdf" as const,
+        title: parsed.title ?? "",
+        abstract: undefined,
+        sections: parsed.sections,
+      };
+    };
+
+    if (source === "pdf") {
+      const pdf = await tryPdf();
+      return { ...pdf, warnings };
+    }
+
+    const native = await tryNative();
+    if (native) return { ...native, warnings };
+
+    const ar5iv = await tryAr5iv();
+    if (ar5iv) return { ...ar5iv, warnings };
+
+    if (source === "html") {
+      throw new UnsupportedError(
+        `No HTML rendering available for ${n.idWithVersion ?? n.id} (native and ar5iv both unavailable); try --source pdf`,
+      );
+    }
+
+    // source === "auto": universal PDF fallback.
+    const pdf = await tryPdf();
+    return { ...pdf, warnings };
+  }
+
+  /** Build a PaperContent response from a chunk of sections. */
+  private assemble(
+    n: NormalizedId,
+    full: {
+      source: "html-native" | "html-ar5iv" | "pdf";
+      title: string;
+      abstract?: string;
+    },
+    chunk: Section[],
+    opts: {
+      format: "markdown" | "text";
+      truncated: boolean;
+      nextCursor?: string;
+      warnings: string[];
+    },
+  ): PaperContent {
+    return {
+      id: n.id,
+      version: n.version,
+      source: full.source,
+      format: opts.format,
+      title: full.title,
+      abstract: full.abstract,
+      sections: chunk,
+      text: chunk.map((s) => s.content).join("\n\n"),
+      truncated: opts.truncated,
+      nextCursor: opts.nextCursor,
+      warnings: opts.warnings.length > 0 ? opts.warnings : undefined,
+    };
+  }
+
   // Phase 6:
-  async getContent(id: string, opts?: ReadOptions): Promise<PaperContent> { throw new Error("getContent: implemented in Phase 6"); }
-  async download(id: string, opts?: DownloadOptions): Promise<{ path: string; bytes: number }> { throw new Error("download: implemented in Phase 6"); }
+  async getContent(id: string, opts?: ReadOptions): Promise<PaperContent> {
+    const n = normalizeId(id);
+    const source = opts?.source ?? "auto";
+    const format = opts?.format ?? "markdown";
+
+    // A cursor pins {id, version, source, sectionIndex}; validate id match first.
+    let startIndex = 0;
+    if (opts?.cursor) {
+      const decoded = decodeCursor(opts.cursor);
+      if (decoded.id !== n.id) {
+        throw new ParseError(
+          `Cursor id mismatch: cursor is for ${decoded.id}, requested ${n.id}`,
+        );
+      }
+      startIndex = decoded.sectionIndex;
+    }
+
+    // Resolve the full content for {id, version, source}, with caching.
+    const cacheKey = (resolved: string) => ({
+      kind: "content" as const,
+      id: n.id,
+      version: n.version,
+      source: resolved,
+    });
+
+    let full:
+      | {
+          source: "html-native" | "html-ar5iv" | "pdf";
+          title: string;
+          abstract?: string;
+          sections: Section[];
+          warnings: string[];
+        }
+      | undefined;
+
+    // When a cursor pins a source we can hit the cache directly for that tuple.
+    if (opts?.cursor) {
+      const decoded = decodeCursor(opts.cursor);
+      const cached = await this.cache?.get<typeof full>(
+        cacheKey(decoded.source),
+      );
+      if (cached) full = cached;
+    }
+
+    if (!full) {
+      full = await this.extractContent(n, source);
+      await this.cache?.set(
+        cacheKey(full.source),
+        full,
+        this.contentTtl(n),
+      );
+    }
+
+    const warnings = [...full.warnings];
+    const allSections = full.sections;
+
+    // ---- section selection wins over maxChars ----
+    if (opts?.section) {
+      const needle = opts.section.toLowerCase();
+      let matches = allSections.filter(
+        (s) => (s.id ?? "").toLowerCase() === needle,
+      );
+      if (matches.length === 0) {
+        matches = allSections.filter((s) =>
+          s.title.toLowerCase().includes(needle),
+        );
+      }
+      if (matches.length === 0) {
+        const titles = allSections.map((s) => s.title).join(", ");
+        throw new NotFoundError(
+          `No section matching "${opts.section}". Available: ${titles}`,
+        );
+      }
+      if (matches.length > 1) {
+        const others = matches
+          .slice(1)
+          .map((s) => s.title)
+          .join(", ");
+        warnings.push(
+          `Multiple sections matched "${opts.section}"; returning the first. Others: ${others}`,
+        );
+      }
+      const chosen = matches[0];
+      return this.assemble(n, full, [chosen], {
+        format,
+        truncated: allSections.length > 1,
+        nextCursor: undefined,
+        warnings,
+      });
+    }
+
+    // ---- maxChars soft target: accumulate whole sections ----
+    const maxChars = opts?.maxChars;
+    let endIndex = startIndex;
+    let acc = 0;
+    while (endIndex < allSections.length) {
+      const len = allSections[endIndex].content.length;
+      if (
+        maxChars !== undefined &&
+        endIndex > startIndex &&
+        acc + len > maxChars
+      ) {
+        break; // adding this section would exceed the target; stop (keep >=1)
+      }
+      acc += len;
+      endIndex++;
+      if (maxChars === undefined) {
+        // no target => take everything in one chunk
+        endIndex = allSections.length;
+        break;
+      }
+    }
+
+    const chunk = allSections.slice(startIndex, endIndex);
+    const hasMore = endIndex < allSections.length;
+    const nextCursor = hasMore
+      ? encodeCursor({
+          id: n.id,
+          version: n.version,
+          source: full.source,
+          sectionIndex: endIndex,
+          charOffset: 0,
+        })
+      : undefined;
+    const truncated = !!opts?.cursor || hasMore;
+
+    return this.assemble(n, full, chunk, {
+      format,
+      truncated,
+      nextCursor,
+      warnings,
+    });
+  }
+
+  async download(
+    id: string,
+    opts?: DownloadOptions,
+  ): Promise<{ path: string; bytes: number }> {
+    const n = normalizeId(id);
+    const dir = opts?.dir ?? this.cfg.downloadsDir;
+    const bytes = await this.api.getPdf(pdfUrl(n));
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, filenameFor(n));
+    await writeFile(path, bytes);
+    return { path, bytes: bytes.byteLength };
+  }
 
   // Phase 7:
   async toBibTeX(id: string): Promise<string> { throw new Error("toBibTeX: implemented in Phase 7"); }
+}
+
+interface CursorPayload {
+  id: string;
+  version?: number;
+  source: "html-native" | "html-ar5iv" | "pdf";
+  sectionIndex: number;
+  charOffset: number;
+}
+
+function encodeCursor(p: CursorPayload): string {
+  return Buffer.from(JSON.stringify(p), "utf8").toString("base64");
+}
+
+function decodeCursor(cursor: string): CursorPayload {
+  try {
+    const json = Buffer.from(cursor, "base64").toString("utf8");
+    const p = JSON.parse(json) as CursorPayload;
+    if (
+      typeof p.id !== "string" ||
+      typeof p.sectionIndex !== "number" ||
+      (p.source !== "html-native" &&
+        p.source !== "html-ar5iv" &&
+        p.source !== "pdf")
+    ) {
+      throw new ParseError("Malformed cursor payload");
+    }
+    return p;
+  } catch (err) {
+    if (err instanceof ParseError) throw err;
+    throw new ParseError(`Invalid cursor: ${String(err)}`);
+  }
 }

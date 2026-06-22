@@ -197,10 +197,8 @@ describe("ArxivClient.getPaper(s)", () => {
 });
 
 describe("ArxivClient stubs", () => {
-  it("getContent/download/toBibTeX throw their phase markers", async () => {
+  it("toBibTeX throws its phase marker (Phase 7 pending)", async () => {
     const { client } = clientWithFeeds([fixture("atom-single.xml")]);
-    await expect(client.getContent("2310.06825")).rejects.toThrow("Phase 6");
-    await expect(client.download("2310.06825")).rejects.toThrow("Phase 6");
     await expect(client.toBibTeX("2310.06825")).rejects.toThrow("Phase 7");
   });
 });
