@@ -5,5 +5,7 @@ dist/
 .env
 coverage/
 
-# SDD execution scratch (briefs, ledger, review packages)
-.superpowers/sdd/
+# AI-process / planning artifacts (kept locally, excluded from the repo)
+.superpowers/
+docs/
+CLAUDE.md
