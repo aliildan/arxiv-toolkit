@@ -77,6 +77,16 @@ describe("getContent source matrix", () => {
     expect(res.source).toBe("pdf");
   });
 
+  it("auto: native 200-with-zero-sections falls through to ar5iv", async () => {
+    const client = clientWith({
+      getHtml: async (url) =>
+        url.includes("ar5iv") ? AR5IV : "<html><body><p>no sections</p></body></html>",
+    });
+    const res = await client.getContent("2310.06825");
+    expect(res.source).toBe("html-ar5iv");
+    expect(res.title).toBe("An ar5iv Historical Paper");
+  });
+
   it("html: native(404)+ar5iv(404) -> UnsupportedError (never PDF)", async () => {
     let pdfCalled = false;
     const client = clientWith({

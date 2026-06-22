@@ -4,7 +4,7 @@ import { Cache } from "./cache.js";
 import { Http } from "./http.js";
 import { ApiDataSource } from "./datasource/api.js";
 import { parseFeed } from "./parse/atom.js";
-import { normalizeId, htmlUrl, ar5ivUrl, pdfUrl, absUrl, filenameFor } from "./ids.js";
+import { normalizeId, htmlUrl, ar5ivUrl, pdfUrl, filenameFor } from "./ids.js";
 import { NotFoundError, ParseError, UnsupportedError, NetworkError } from "./errors.js";
 import type { DataSource } from "./datasource/datasource.js";
 import type {
@@ -436,6 +436,7 @@ function decodeCursor(cursor: string): CursorPayload {
     if (
       typeof p.id !== "string" ||
       typeof p.sectionIndex !== "number" ||
+      typeof p.charOffset !== "number" ||
       (p.source !== "html-native" &&
         p.source !== "html-ar5iv" &&
         p.source !== "pdf")
