@@ -158,6 +158,25 @@ With a global install, use the bin directly:
 | `arxiv_list_recent` | Recent papers in a category. |
 | `arxiv_download` | Save a PDF; returns the absolute path + a `file://` resource link. |
 
+## Literature-review skill
+
+The repo ships an [Agent Skill](https://agentskills.io) — `literature-review` — that teaches Claude to do a focused, cited literature review on top of the MCP tools: scope the topic, search (narrowing large result sets instead of deep-paging), read the key papers in chunks to respect the context budget, synthesize by theme, and emit a BibTeX bibliography.
+
+Install it once (works with Claude Code, Claude Desktop, and the API):
+
+```bash
+# from a checkout of this repo …
+cp -r skills/literature-review ~/.claude/skills/
+# … or from a global npm install:
+cp -r "$(npm root -g)/arxiv-toolkit/skills/literature-review" ~/.claude/skills/
+```
+
+Register the `arxiv-mcp` server (above), then just ask Claude:
+
+> "Give me a literature review of speculative decoding for LLMs."
+
+The skill lives in [`skills/literature-review/`](./skills/literature-review/) (`SKILL.md` + an arXiv query-syntax reference) — read or adapt it freely.
+
 ## Browser fallback (off by default)
 
 The API-first path (official arXiv endpoints) is the default and needs no browser. An
