@@ -118,6 +118,27 @@ describe("Http", () => {
     expect(Array.from(got)).toEqual([37, 80, 68, 70, 45]);
   });
 
+  it("retries on timeout and ultimately throws NetworkError", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "queueMicrotask", "process.nextTick"] as any });
+    try {
+      const timeoutErr = Object.assign(new DOMException("The operation timed out.", "TimeoutError"), {});
+      fetchMock.mockRejectedValue(timeoutErr);
+      const http = new Http(baseCfg(), new RateLimiter(0));
+      // Attach rejection handler immediately to avoid unhandled-rejection warning
+      let caughtErr: unknown;
+      const p = http.getText("https://export.arxiv.org/api/query?x=timeout").catch((e) => { caughtErr = e; });
+      for (let i = 0; i < MAX_RETRIES + 1; i++) {
+        await vi.advanceTimersByTimeAsync(10000);
+      }
+      await p;
+      expect(caughtErr).toMatchObject({ code: "NETWORK" });
+      expect(fetchMock).toHaveBeenCalledTimes(MAX_RETRIES + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("acquires the limiter once per request, keyed by hostname", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(textResponse("ok")));
     const limiter = new RateLimiter(0);

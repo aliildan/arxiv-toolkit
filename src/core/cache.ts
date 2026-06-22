@@ -16,7 +16,7 @@ const hashKey = (key: object): string =>
 
 export interface CacheEntryMeta {
   fetchedAt: number;
-  ttl: number;
+  ttl: number | null;
   key: unknown;
 }
 

@@ -8,6 +8,8 @@ const hostnameOf = (url: string): string => new URL(url).hostname;
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 export const MAX_RETRIES = 3;
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export const BASE_BACKOFF_MS = 500;
 
 const isRetryableStatus = (status: number): boolean => status === 429 || (status >= 500 && status < 600);
@@ -47,6 +49,7 @@ export class Http {
         const res = await fetch(url, {
           method: "GET",
           headers: { "User-Agent": this.cfg.userAgent, Accept: accept },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (!isRetryableStatus(res.status)) {
           return res;
