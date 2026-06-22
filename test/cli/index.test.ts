@@ -201,6 +201,20 @@ describe("cli index", () => {
     expect(out.buf.join("")).toContain("/papers/1706.03762v1.pdf");
   });
 
+  it("defaultClientFactory sets browserFallback=true when browser flag is set", () => {
+    const client = defaultClientFactory({ browser: true }) as unknown as {
+      cfg: { browserFallback: boolean };
+    };
+    expect(client.cfg.browserFallback).toBe(true);
+  });
+
+  it("defaultClientFactory leaves browserFallback=false when browser flag is absent", () => {
+    const client = defaultClientFactory({}) as unknown as {
+      cfg: { browserFallback: boolean };
+    };
+    expect(client.cfg.browserFallback).toBe(false);
+  });
+
   it("cache path command prints the cache dir without creating a client", async () => {
     // createClient should NOT be called for cache commands
     const createClient = vi.fn().mockReturnValue({ getPapers: vi.fn() } as unknown as ArxivClient);
