@@ -91,7 +91,7 @@ export function createProgram(deps: CliDeps = {}): Command {
     new Option("--sort <field>", "Sort by").default("relevance").choices(["relevance", "submitted", "updated"]),
   );
   search.addOption(
-    new Option("--order <dir>", "Sort order").default("descending").choices(["asc", "desc"]),
+    new Option("--order <dir>", "Sort order").default("desc").choices(["asc", "desc"]),
   );
   search.option("--max <n>", "Maximum results", (v: string) => Number(v), 25);
   search.option("--start <n>", "Start offset", (v: string) => Number(v), 0);
@@ -105,7 +105,7 @@ export function createProgram(deps: CliDeps = {}): Command {
       title: opts.title as string | undefined,
       abstract: opts.abstract as string | undefined,
       sort: opts.sort as SearchFlags["sort"],
-      order: opts.order as SearchFlags["order"],
+      order: opts.order as "asc" | "desc" | undefined,
       max: opts.max as number | undefined,
       start: opts.start as number | undefined,
       json: globalFlags.json,
@@ -142,5 +142,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (c !== 0) process.exit(c);
   });
 }
-
-void (null as unknown as ArxivConfig);
