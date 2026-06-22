@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="arxiv-toolkit logo" width="180">
+
 # arxiv-toolkit
 
 ### Search arXiv, read papers as clean Markdown, and run cited literature reviews — straight from your terminal or any MCP client.
