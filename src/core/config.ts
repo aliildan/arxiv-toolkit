@@ -17,10 +17,11 @@ function readPkg(): PkgMeta {
   // Resolve the project root package.json relative to this source file.
   // __dirname is unavailable in ESM; derive it from import.meta.url.
   const here = dirname(fileURLToPath(import.meta.url));
-  // dist/core/config.js -> ../../package.json ; src/core/config.ts -> ../../package.json
-  // try a couple of depths so it works both from src (vitest) and dist.
+  // Bundled output is flat (dist/*.js -> ../package.json); from src under
+  // vitest it is src/core/*.ts -> ../../package.json. Try both depths.
   const candidates = [
-    join(here, "..", "..", "package.json"),
+    join(here, "..", "package.json"), // bundled flat dist/ -> package root
+    join(here, "..", "..", "package.json"), // src/core/ -> repo root (dev/vitest)
     join(here, "..", "..", "..", "package.json"),
   ];
   for (const p of candidates) {

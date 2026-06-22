@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { ArxivClient } from "../core/client.js";
+import { isEntrypoint } from "../core/is-main.js";
 import type { ArxivConfig } from "../core/types.js";
 import { VERSION } from "../core/version.js";
 export { VERSION };
@@ -270,7 +271,7 @@ export async function run(argv: string[] = process.argv.slice(2), deps: CliDeps 
   return code;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntrypoint(import.meta.url)) {
   run().then((c) => {
     if (c !== 0) process.exit(c);
   });

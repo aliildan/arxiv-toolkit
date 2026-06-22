@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ArxivClient } from "../core/client.js";
+import { isEntrypoint } from "../core/is-main.js";
 import { buildServer } from "./server.js";
 
 export interface BootDeps {
@@ -14,7 +15,7 @@ export async function main(deps: BootDeps = {}): Promise<void> {
   await server.connect(deps.transport ?? new StdioServerTransport());
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntrypoint(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

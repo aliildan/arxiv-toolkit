@@ -7,7 +7,8 @@ const require = createRequire(import.meta.url);
 function readVersion(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    join(here, "..", "..", "package.json"),
+    join(here, "..", "package.json"), // bundled flat dist/ -> package root
+    join(here, "..", "..", "package.json"), // src/<dir>/ -> repo root (dev/vitest)
     join(here, "..", "..", "..", "package.json"),
   ];
   for (const p of candidates) {

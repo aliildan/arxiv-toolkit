@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  symlinkSync,
+  rmSync,
+  mkdtempSync,
+} from "node:fs";
 import { execSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { tmpdir } from "node:os";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +70,33 @@ describe("build output", () => {
       const mod = await import(distIndexUrl) as Record<string, unknown>;
       expect(typeof mod.ArxivClient).toBe("function");
       expect(typeof mod.normalizeId).toBe("function");
+    },
+    30000,
+  );
+
+  // Regression: an npm-installed bin runs via a SYMLINK, so the entry-point
+  // guard must compare resolved real paths (not raw argv[1]). A naive
+  // `import.meta.url === file://${process.argv[1]}` makes the bin a silent
+  // no-op when invoked through the symlink (the real global-install case).
+  it(
+    "cli.js runs and prints the real version when invoked via a symlink",
+    () => {
+      const expected = (
+        JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8")) as {
+          version: string;
+        }
+      ).version;
+      const dir = mkdtempSync(join(tmpdir(), "arxiv-bin-"));
+      const link = join(dir, "arxiv");
+      symlinkSync(resolve(distDir, "cli.js"), link);
+      try {
+        const out = execSync(`node ${link} --version`, {
+          encoding: "utf8",
+        }).trim();
+        expect(out).toBe(expected); // not empty, and not the "0.0.0" fallback
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     },
     30000,
   );
