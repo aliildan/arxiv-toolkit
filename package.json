@@ -1,7 +1,7 @@
 {
   "name": "arxiv-toolkit",
   "version": "0.1.0",
-  "description": "CLI and MCP server for searching arXiv, fetching metadata, and reading papers",
+  "description": "Search arXiv, fetch metadata, and read papers (HTML→Markdown with PDF fallback) — CLI and MCP server.",
   "type": "module",
   "license": "MIT",
   "author": {
@@ -12,10 +12,22 @@
     "type": "git",
     "url": "https://github.com/aliildan/arxiv-toolkit"
   },
+  "homepage": "https://github.com/aliildan/arxiv-toolkit#readme",
+  "bugs": {
+    "url": "https://github.com/aliildan/arxiv-toolkit/issues"
+  },
   "engines": {
     "node": ">=20.19"
   },
-  "files": ["dist"],
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.18 || >=24.11"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -26,9 +38,23 @@
     "arxiv": "./dist/cli.js",
     "arxiv-mcp": "./dist/mcp.js"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "keywords": [
+    "arxiv",
+    "arXiv",
+    "papers",
+    "research",
+    "mcp",
+    "model-context-protocol",
+    "cli",
+    "markdown",
+    "bibtex"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
+    "test:live": "ARXIV_LIVE=1 vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
