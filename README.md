@@ -43,7 +43,7 @@ npx -y --package arxiv-toolkit arxiv-mcp
 arxiv <command> [options]
 
 Commands:
-  search <query>          Search arXiv.
+  search [query]          Search arXiv (query optional if a field flag is given).
   get <id...>             Fetch metadata for one or more IDs.
   read <id>               Read a paper as Markdown/text.
   download <id...>        Save PDF(s) to disk.
