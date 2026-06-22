@@ -54,7 +54,7 @@ export class Http {
         lastResponse = res;
         if (attempt === MAX_RETRIES) break;
         const ra = retryAfterMs(res);
-        const delay = ra !== null && ra > 0 ? ra : backoffMs(attempt);
+        const delay = ra !== null && ra >= 0 ? ra : backoffMs(attempt);
         await sleep(delay);
       } catch (err) {
         lastError = err;

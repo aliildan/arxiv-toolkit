@@ -113,6 +113,38 @@ describe("resolveConfig env precedence", () => {
   });
 });
 
+describe("resolveConfig env var validation (parsePositiveInt guard)", () => {
+  it("ARXIV_RATE_MS=foo falls back to default 3000 (not NaN)", () => {
+    process.env.ARXIV_RATE_MS = "foo";
+    expect(resolveConfig().rateMs).toBe(3000);
+  });
+
+  it("ARXIV_MAX_RESULTS=abc falls back to default 25 (not NaN)", () => {
+    process.env.ARXIV_MAX_RESULTS = "abc";
+    expect(resolveConfig().defaultMaxResults).toBe(25);
+  });
+
+  it("ARXIV_RATE_MS=0 falls back to default (zero is not positive)", () => {
+    process.env.ARXIV_RATE_MS = "0";
+    expect(resolveConfig().rateMs).toBe(3000);
+  });
+
+  it("ARXIV_MAX_RESULTS=-5 falls back to default (negative is not positive)", () => {
+    process.env.ARXIV_MAX_RESULTS = "-5";
+    expect(resolveConfig().defaultMaxResults).toBe(25);
+  });
+
+  it("valid ARXIV_RATE_MS=1500 still parses correctly", () => {
+    process.env.ARXIV_RATE_MS = "1500";
+    expect(resolveConfig().rateMs).toBe(1500);
+  });
+
+  it("valid ARXIV_MAX_RESULTS=100 still parses correctly", () => {
+    process.env.ARXIV_MAX_RESULTS = "100";
+    expect(resolveConfig().defaultMaxResults).toBe(100);
+  });
+});
+
 describe("resolveConfig overrides > env > file", () => {
   it("explicit overrides win over env", () => {
     process.env.ARXIV_RATE_MS = "1500";

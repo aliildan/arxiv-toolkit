@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command, CommanderError, Option } from "commander";
+import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { ArxivClient } from "../core/client.js";
 import type { ArxivConfig } from "../core/types.js";
 import { runSearch } from "./commands/search.js";
@@ -70,6 +70,19 @@ function commanderExitCode(e: unknown): number {
   return 1;
 }
 
+/**
+ * Commander argParser for integer flags.
+ * Throws InvalidArgumentError (commander surfaces as a usage error, exit 1)
+ * when the value is not a valid finite integer.
+ */
+function parseIntFlag(v: string): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+    throw new InvalidArgumentError(`Expected an integer, got: ${v}`);
+  }
+  return n;
+}
+
 export function createProgram(deps: CliDeps = {}): Command {
   const createClient = deps.createClient ?? defaultClientFactory;
   const stdout = deps.stdout ?? process.stdout;
@@ -104,8 +117,8 @@ export function createProgram(deps: CliDeps = {}): Command {
   search.addOption(
     new Option("--order <dir>", "Sort order").default("desc").choices(["asc", "desc"]),
   );
-  search.option("--max <n>", "Maximum results", (v: string) => Number(v), 25);
-  search.option("--start <n>", "Start offset", (v: string) => Number(v), 0);
+  search.option("--max <n>", "Maximum results", parseIntFlag, 25);
+  search.option("--start <n>", "Start offset", parseIntFlag, 0);
 
   search.action(async function (query: string | undefined, opts: RawOpts) {
     const globalFlags = mergeGlobal(program.opts(), opts);
@@ -161,7 +174,7 @@ export function createProgram(deps: CliDeps = {}): Command {
       .choices(["markdown", "text"]),
   );
   read.option("--section <name>", "Return a single named section");
-  read.option("--max-chars <n>", "Soft chunk character target", (v: string) => Number(v));
+  read.option("--max-chars <n>", "Soft chunk character target", parseIntFlag);
   read.option("--out <file>", "Write output to a file instead of stdout");
 
   read.action(async function (id: string, opts: RawOpts) {
@@ -185,7 +198,7 @@ export function createProgram(deps: CliDeps = {}): Command {
   const recent = program.command("recent <category>");
   recent.description("List the most recent papers in an arXiv category");
   addCommonOptions(recent);
-  recent.option("--max <n>", "Maximum results", (v: string) => Number(v));
+  recent.option("--max <n>", "Maximum results", parseIntFlag);
 
   recent.action(async function (category: string, opts: RawOpts) {
     const globalFlags = mergeGlobal(program.opts(), opts);

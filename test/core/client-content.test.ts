@@ -127,7 +127,8 @@ describe("getContent section selection", () => {
     });
     expect(res.sections).toHaveLength(1);
     expect(res.sections[0].id).toBe("S1.SS1");
-    expect(res.truncated).toBe(true);
+    // Section selection is a filter, not a chunk — truncated must be false
+    expect(res.truncated).toBe(false);
     expect(res.nextCursor).toBeUndefined();
   });
 

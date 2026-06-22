@@ -114,8 +114,10 @@ export function markdownToText(md: string): string {
   text = text.replace(/_{2}(.+?)_{2}/g, "$1");
 
   // Italic: *x* or _x_ → x  (single char boundary avoids touching math $x$)
-  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1");
-  text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, "$1");
+  // Use negated character class instead of .+? to avoid O(N²) backtracking on
+  // lines with many lone markers.
+  text = text.replace(/(?<!\*)\*(?!\*)([^*\n]+?)\*(?!\*)/g, "$1");
+  text = text.replace(/(?<!_)_(?!_)([^_\n]+?)_(?!_)/g, "$1");
 
   // Inline code: `x` → x  (but NOT $$…$$ or $…$ — leave math alone)
   text = text.replace(/`([^`]+)`/g, "$1");

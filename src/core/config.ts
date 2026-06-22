@@ -54,6 +54,17 @@ function isTruthy(v: string | undefined): boolean {
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
 }
 
+/**
+ * Parse a positive integer from an environment-variable string.
+ * Returns the parsed integer only when it is finite and > 0; otherwise undefined
+ * (so callers fall back to their defaults).
+ */
+function parsePositiveInt(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && Number.isInteger(n) ? n : undefined;
+}
+
 function readConfigFile(configDir: string): Partial<ArxivConfig> {
   try {
     const raw = readFileSync(join(configDir, "config.json"), "utf8");
@@ -99,8 +110,10 @@ export function resolveConfig(overrides?: Partial<ArxivConfig>): ArxivConfig {
   const fromEnv: Partial<ArxivConfig> = {};
   if (process.env.ARXIV_CACHE_DIR) fromEnv.cacheDir = process.env.ARXIV_CACHE_DIR;
   if (process.env.ARXIV_DOWNLOADS_DIR) fromEnv.downloadsDir = process.env.ARXIV_DOWNLOADS_DIR;
-  if (process.env.ARXIV_RATE_MS) fromEnv.rateMs = Number(process.env.ARXIV_RATE_MS);
-  if (process.env.ARXIV_MAX_RESULTS) fromEnv.defaultMaxResults = Number(process.env.ARXIV_MAX_RESULTS);
+  const rateMs = parsePositiveInt(process.env.ARXIV_RATE_MS);
+  if (rateMs !== undefined) fromEnv.rateMs = rateMs;
+  const defaultMaxResults = parsePositiveInt(process.env.ARXIV_MAX_RESULTS);
+  if (defaultMaxResults !== undefined) fromEnv.defaultMaxResults = defaultMaxResults;
   if (process.env.ARXIV_NO_CACHE) fromEnv.noCache = isTruthy(process.env.ARXIV_NO_CACHE);
   if (process.env.ARXIV_BROWSER) fromEnv.browserFallback = isTruthy(process.env.ARXIV_BROWSER);
   if (process.env.ARXIV_CONTACT) fromEnv.contact = process.env.ARXIV_CONTACT;

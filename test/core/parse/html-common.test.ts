@@ -175,6 +175,18 @@ describe("markdownToText", () => {
     expect(text).toContain("$$\\int_0^1 x\\,dx = \\frac{1}{2}$$");
   });
 
+  it("does not hang on a line with many lone asterisks (backtracking guard)", () => {
+    // 50 lone asterisks — with a catastrophic (.+?) regex this would hang
+    const md = "*".repeat(50) + " some text";
+    const start = Date.now();
+    const text = markdownToText(md);
+    const elapsed = Date.now() - start;
+    // Must complete in under 1000ms (real catastrophic backtracking takes minutes)
+    expect(elapsed).toBeLessThan(1000);
+    // Lone unpaired asterisks should be preserved (no stripping of unmatched markers)
+    expect(text).toContain("*");
+  });
+
   it("collapses excess blank lines", () => {
     const md = "line one\n\n\n\nline two";
     const text = markdownToText(md);

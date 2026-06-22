@@ -3,6 +3,7 @@ import { ArxivClient } from "../../src/core/client.js";
 import type { DataSource } from "../../src/core/datasource/datasource.js";
 import type { Paper } from "../../src/core/types.js";
 import { generateBibTeX } from "../../src/core/bibtex.js";
+import { RateLimitedError } from "../../src/core/errors.js";
 
 // A Paper fixture used both as getPaper's return value and as a source of truth
 // for the generated fallback string.
@@ -93,6 +94,24 @@ describe("ArxivClient.toBibTeX", () => {
     const client = makeClient(ds);
     await client.toBibTeX("2310.06825");
     expect(client.getPaper).toHaveBeenCalledWith("2310.06825");
+  });
+
+  it("re-throws the original fetchErr (RateLimitedError) when getText AND getPaper both fail", async () => {
+    const rateLimitErr = new RateLimitedError("rate limited");
+    const ds = makeDataSource(() => Promise.reject(rateLimitErr));
+    const client = new ArxivClient({ noCache: true });
+    (client as unknown as Record<string, unknown>)["api"] = ds;
+    // Make getPaper also fail (simulate network out)
+    vi.spyOn(client, "getPaper").mockRejectedValue(new Error("getPaper also failed"));
+    await expect(client.toBibTeX("2310.06825")).rejects.toThrow(rateLimitErr);
+  });
+
+  it("returns generated BibTeX when getText throws but getPaper succeeds", async () => {
+    const ds = makeDataSource(() => Promise.reject(new RateLimitedError("rate limited")));
+    const client = makeClient(ds);
+    const result = await client.toBibTeX("2310.06825");
+    const expected = generateBibTeX(FIXTURE_PAPER);
+    expect(result).toBe(expected);
   });
 
   it("calls getText with old-style slash preserved in the URL", async () => {

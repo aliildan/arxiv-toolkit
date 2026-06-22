@@ -397,7 +397,7 @@ export class ArxivClient {
       const chosen = matches[0];
       return this.assemble(n, full, [chosen], {
         format,
-        truncated: allSections.length > 1,
+        truncated: false,
         nextCursor: undefined,
         warnings,
       });
@@ -464,9 +464,17 @@ export class ArxivClient {
     const n = normalizeId(id);
     try {
       return await this.api.getText(bibtexUrl(n));
-    } catch {
-      const paper = await this.getPaper(id);
-      return generateBibTeX(paper);
+    } catch (fetchErr) {
+      // Fallback: generate BibTeX locally from paper metadata.
+      // If the local generation also fails, re-throw the *original* error
+      // (e.g. RateLimitedError) so callers can distinguish network issues
+      // from a mere not-found.
+      try {
+        const paper = await this.getPaper(id);
+        return generateBibTeX(paper);
+      } catch {
+        throw fetchErr;
+      }
     }
   }
 }

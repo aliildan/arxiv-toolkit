@@ -139,6 +139,25 @@ describe("Http", () => {
     }
   });
 
+  it("honors Retry-After: 0 (zero-delay immediate retry, not backoff)", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "queueMicrotask", "process.nextTick"] as any });
+    try {
+      fetchMock
+        .mockResolvedValueOnce(new Response(null, { status: 503, headers: { "Retry-After": "0" } }))
+        .mockResolvedValueOnce(textResponse("ok"));
+      const http = new Http(baseCfg(), new RateLimiter(0));
+      const p = http.getText("https://export.arxiv.org/api/query?x=ra0");
+      // settle microtasks: Retry-After: 0 should fire a 0ms sleep, not backoff (500ms+)
+      await vi.advanceTimersByTimeAsync(0);
+      const body = await p;
+      expect(body).toBe("ok");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("acquires the limiter once per request, keyed by hostname", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(textResponse("ok")));
     const limiter = new RateLimiter(0);

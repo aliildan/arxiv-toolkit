@@ -112,6 +112,19 @@ describe("cli index", () => {
     expect(mockClient.search).not.toHaveBeenCalled();
   });
 
+  it("search --max with a non-integer exits 1 and does NOT call client.search", async () => {
+    const mockSearch = vi.fn();
+    const mockClient = { search: mockSearch } as unknown as ArxivClient;
+    const err = sink();
+    const code = await run(["search", "x", "--max", "abc"], {
+      createClient: () => mockClient,
+      stdout: sink().io,
+      stderr: err.io,
+    });
+    expect(code).toBe(1);
+    expect(mockSearch).not.toHaveBeenCalled();
+  });
+
   it("defaultClientFactory builds an ArxivClient with overrides", () => {
     const c = defaultClientFactory({ noCache: true, cacheDir: "/tmp/c", browser: true });
     expect(c).toBeInstanceOf(ArxivClient);
