@@ -1,0 +1,55 @@
+{
+  "name": "arxiv-toolkit",
+  "version": "0.1.0",
+  "description": "CLI and MCP server for searching arXiv, fetching metadata, and reading papers",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Ali Ildan",
+    "email": "ali.ildan@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aliildan/arxiv-toolkit"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "arxiv": "./dist/cli.js",
+    "arxiv-mcp": "./dist/mcp.js"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^15.0.0",
+    "env-paths": "^4.0.0",
+    "fast-xml-parser": "^5.9.3",
+    "linkedom": "^0.18.12",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "unpdf": "^1.6.2",
+    "zod": "^3.25"
+  },
+  "optionalDependencies": {
+    "playwright-core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/turndown": "*",
+    "tsdown": "^0.22.3",
+    "typescript": "^6.0",
+    "vitest": "^4.1.9"
+  }
+}
