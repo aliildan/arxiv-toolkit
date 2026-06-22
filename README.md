@@ -180,22 +180,31 @@ The skill lives in [`skills/literature-review/`](./skills/literature-review/) (`
 ## Browser fallback (off by default)
 
 The API-first path (official arXiv endpoints) is the default and needs no browser. An
-optional browser fallback (`playwright-core`, an `optionalDependency`, lazy-loaded) can
-retry the **same** URLs when the API path fails for a **non-content** reason (e.g. a
-challenge/`403`, or repeated `5xx`/connection/TLS failure after retries are exhausted).
-It is **not** triggered by a clean `404` (a legitimate "not available here" → the source
-matrix continues to the next source).
+optional browser fallback (`playwright-core`, lazy-loaded) can retry the **same** URLs when
+the API path fails for a **non-content** reason (e.g. a challenge/`403`, or repeated
+`5xx`/connection/TLS failure after retries are exhausted). It is **not** triggered by a
+clean `404` (a legitimate "not available here" → the source matrix continues to the next
+source).
 
-Enable it with:
+`playwright-core` is an **optional peer dependency** — it is **not** installed by default,
+so the standard install stays lean. To use the fallback, install it yourself plus a
+browser binary:
+
+```bash
+npm i -g playwright-core   # or add it to your project
+npx playwright install chromium
+```
+
+Then enable the fallback with any of:
 
 - the `--browser` CLI flag,
 - the `ARXIV_BROWSER=1` environment variable, or
 - `"browserFallback": true` in the config file.
 
-If no browser binary is installed when the fallback is engaged, `arxiv-toolkit` raises a
-clear `UnsupportedError` with install guidance and **leaves the API path unaffected** — it
-never breaks the default flow. Cache maintenance is CLI/ops-only; there is no MCP cache
-tool.
+If `playwright-core` or a browser binary is missing when the fallback is engaged,
+`arxiv-toolkit` raises a clear `UnsupportedError` with install guidance and **leaves the
+API path unaffected** — it never breaks the default flow. Cache maintenance is CLI/ops-only;
+there is no MCP cache tool.
 
 ## Configuration
 

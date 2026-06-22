@@ -27,7 +27,9 @@ export interface BrowserDataSourceOptions {
 }
 
 const INSTALL_GUIDANCE =
-  "No browser binary found. Install one with: npx playwright install chromium\n" +
+  "The browser fallback is optional and not installed by default. Enable it with:\n" +
+  "  npm i -g playwright-core   (or add playwright-core to your project)\n" +
+  "  npx playwright install chromium\n" +
   "Then re-run with --browser or ARXIV_BROWSER=1.";
 
 async function loadChromium(importer?: PlaywrightImporter): Promise<BrowserLauncher> {

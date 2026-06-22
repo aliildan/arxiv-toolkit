@@ -1,6 +1,6 @@
 {
   "name": "arxiv-toolkit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Search arXiv, fetch metadata, and read papers (HTML→Markdown with PDF fallback) — CLI and MCP server.",
   "type": "module",
   "license": "MIT",
@@ -71,8 +71,13 @@
     "unpdf": "^1.6.2",
     "zod": "^3.25"
   },
-  "optionalDependencies": {
+  "peerDependencies": {
     "playwright-core": "*"
+  },
+  "peerDependenciesMeta": {
+    "playwright-core": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "*",
