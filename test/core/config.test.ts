@@ -52,11 +52,14 @@ describe("resolveConfig defaults", () => {
     expect(cfg.downloadsDir.endsWith("papers")).toBe(true);
   });
 
-  it("UA starts with arxiv-toolkit/<version> and includes repo url, no mailto when no contact", () => {
+  it("UA starts with arxiv-toolkit/<version> and includes repo url and mailto from package.json author when no ARXIV_CONTACT", () => {
     delete process.env.ARXIV_CONTACT;
     const cfg = resolveConfig();
     expect(cfg.userAgent).toMatch(/^arxiv-toolkit\//);
-    expect(cfg.userAgent).not.toContain("mailto:");
+    // spec §9: mailto comes from package.json author.email when ARXIV_CONTACT is unset
+    expect(cfg.userAgent).toMatch(/mailto:.+@.+/);
+    expect(cfg.contact).toBeTruthy();
+    expect(cfg.contact).toContain("@");
   });
 });
 

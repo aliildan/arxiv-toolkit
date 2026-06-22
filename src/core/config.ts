@@ -39,6 +39,16 @@ function repoUrl(pkg: PkgMeta): string {
   return pkg.repository.url ?? "https://github.com/anthropics/arxiv-toolkit";
 }
 
+function authorEmail(pkg: PkgMeta): string | undefined {
+  if (!pkg.author) return undefined;
+  if (typeof pkg.author === "string") {
+    // "Name <email>" format
+    const m = pkg.author.match(/<([^>]+)>/);
+    return m ? m[1] : undefined;
+  }
+  return pkg.author.email;
+}
+
 function isTruthy(v: string | undefined): boolean {
   if (v === undefined) return false;
   return ["1", "true", "yes", "on"].includes(v.toLowerCase());
@@ -110,7 +120,10 @@ export function resolveConfig(overrides?: Partial<ArxivConfig>): ArxivConfig {
   } else if (overrides?.userAgent) {
     // Already set from overrides above; leave it.
   } else {
-    // Assemble UA using contact from env only (not author email fallback).
+    // Resolve contact: env/override > package.json author.email (spec §9).
+    if (!merged.contact) {
+      merged.contact = authorEmail(pkg);
+    }
     merged.userAgent = buildUserAgent(pkg, merged.contact);
   }
 
