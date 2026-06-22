@@ -55,7 +55,9 @@
     "build": "tsdown",
     "test": "vitest run",
     "test:live": "ARXIV_LIVE=1 vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "tsdown",
+    "prepublishOnly": "tsc --noEmit && vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
