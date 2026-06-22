@@ -4,7 +4,8 @@ import { Cache } from "./cache.js";
 import { Http } from "./http.js";
 import { ApiDataSource } from "./datasource/api.js";
 import { parseFeed } from "./parse/atom.js";
-import { normalizeId, htmlUrl, ar5ivUrl, pdfUrl, filenameFor } from "./ids.js";
+import { normalizeId, htmlUrl, ar5ivUrl, pdfUrl, filenameFor, bibtexUrl } from "./ids.js";
+import { generateBibTeX } from "./bibtex.js";
 import { NotFoundError, ParseError, UnsupportedError, NetworkError } from "./errors.js";
 import type { DataSource } from "./datasource/datasource.js";
 import type {
@@ -414,7 +415,15 @@ export class ArxivClient {
   }
 
   // Phase 7:
-  async toBibTeX(id: string): Promise<string> { throw new Error("toBibTeX: implemented in Phase 7"); }
+  async toBibTeX(id: string): Promise<string> {
+    const n = normalizeId(id);
+    try {
+      return await this.api.getText(bibtexUrl(n));
+    } catch {
+      const paper = await this.getPaper(id);
+      return generateBibTeX(paper);
+    }
+  }
 }
 
 interface CursorPayload {
