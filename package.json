@@ -1,6 +1,6 @@
 {
   "name": "arxiv-toolkit",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Search arXiv, fetch metadata, and read papers (HTML→Markdown with PDF fallback) — CLI and MCP server.",
   "type": "module",
   "license": "MIT",
