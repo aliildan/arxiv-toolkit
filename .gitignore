@@ -4,3 +4,6 @@ dist/
 .DS_Store
 .env
 coverage/
+
+# SDD execution scratch (briefs, ledger, review packages)
+.superpowers/sdd/
