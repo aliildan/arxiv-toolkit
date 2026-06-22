@@ -73,7 +73,7 @@ export class ArxivClient {
     if (searchQuery) parts.push(`search_query=${searchQuery}`);
     if (hasIds) {
       // Canonical ids keep the literal slash (old-style) — never %2F.
-      const idList = params.ids!.map((id) => normalizeId(id).idWithVersion ?? normalizeId(id).id).join(",");
+      const idList = params.ids!.map((id) => { const n = normalizeId(id); return n.idWithVersion ?? n.id; }).join(",");
       parts.push(`id_list=${idList}`);
     }
     parts.push(`start=${start}`);
@@ -85,7 +85,7 @@ export class ArxivClient {
 
   async search(params: SearchParams): Promise<SearchResult> {
     const url = this.buildQueryUrl(params); // throws ParseError on empty params
-    const cacheKey = { kind: "search" as const, paramsHash: params };
+    const cacheKey = { kind: "search" as const, normalizedParamsHash: url };
     const cached = await this.cache?.get<SearchResult>(cacheKey);
     if (cached) return cached;
 
