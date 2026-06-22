@@ -1,4 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { main } from "../../src/mcp/index.js";
 import type { ArxivClient } from "../../src/core/client.js";
 
@@ -7,15 +9,22 @@ function mockClient(): ArxivClient {
 }
 
 describe("mcp index main", () => {
-  it("connects the built server to the transport", async () => {
-    const transport = { connect: vi.fn(async (_server: unknown) => {}) };
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls server.connect(transport) — real SDK dispatch, not transport.connect(server)", async () => {
+    // Spy on the real McpServer.prototype.connect so we can assert the direction.
+    const connectSpy = vi.spyOn(McpServer.prototype, "connect").mockResolvedValue(undefined);
+    const transport = new StdioServerTransport();
     await main({ client: mockClient(), transport });
-    expect(transport.connect).toHaveBeenCalledTimes(1);
-    expect(transport.connect).toHaveBeenCalledWith(expect.objectContaining({ registerTool: expect.any(Function) }));
+    expect(connectSpy).toHaveBeenCalledTimes(1);
+    expect(connectSpy).toHaveBeenCalledWith(transport);
   });
 
   it("propagates transport connect errors", async () => {
-    const transport = { connect: vi.fn(async () => { throw new Error("stdio broken"); }) };
+    vi.spyOn(McpServer.prototype, "connect").mockRejectedValue(new Error("stdio broken"));
+    const transport = new StdioServerTransport();
     await expect(main({ client: mockClient(), transport })).rejects.toThrow("stdio broken");
   });
 });

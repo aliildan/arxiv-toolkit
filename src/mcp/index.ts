@@ -5,17 +5,13 @@ import { buildServer } from "./server.js";
 
 export interface BootDeps {
   client?: ArxivClient;
-  transport?: { connect(server: unknown): Promise<void> };
+  transport?: StdioServerTransport;
 }
 
 export async function main(deps: BootDeps = {}): Promise<void> {
   const client = deps.client ?? new ArxivClient();
   const server = buildServer(client);
-  if (deps.transport) {
-    await deps.transport.connect(server);
-  } else {
-    await server.connect(new StdioServerTransport());
-  }
+  await server.connect(deps.transport ?? new StdioServerTransport());
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

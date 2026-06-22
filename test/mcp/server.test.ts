@@ -105,7 +105,7 @@ describe("recentHandler", () => {
   });
 });
 
-describe("registerTools (search + recent)", () => {
+describe("registerTools (all five tools)", () => {
   it("registers arxiv_search and arxiv_list_recent with input + output schemas", () => {
     const calls: Array<{ name: string; config: { description: string; inputSchema: Record<string, unknown>; outputSchema?: Record<string, unknown> }; handler: (args: unknown) => Promise<ToolResult> }> = [];
     const registry: ToolRegistry = {
