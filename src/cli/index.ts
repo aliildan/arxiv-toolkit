@@ -2,6 +2,8 @@
 import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { ArxivClient } from "../core/client.js";
 import type { ArxivConfig } from "../core/types.js";
+import { VERSION } from "../core/version.js";
+export { VERSION };
 import { runSearch } from "./commands/search.js";
 import type { SearchFlags } from "./commands/search.js";
 import { runGet } from "./commands/get.js";
@@ -14,8 +16,6 @@ import { runDownload } from "./commands/download.js";
 import type { DownloadFlags } from "./commands/download.js";
 import { runCache } from "./commands/cache.js";
 import type { CacheAction } from "./commands/cache.js";
-
-export const VERSION = "0.1.0";
 
 export type Stdio = { write(chunk: string): boolean };
 

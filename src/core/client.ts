@@ -452,7 +452,7 @@ export class ArxivClient {
   ): Promise<{ path: string; bytes: number }> {
     const n = normalizeId(id);
     const dir = opts?.dir ?? this.cfg.downloadsDir;
-    const bytes = await this.api.getPdf(pdfUrl(n));
+    const bytes = await this.pdfWithBrowserFallback(pdfUrl(n));
     await mkdir(dir, { recursive: true });
     const path = join(dir, filenameFor(n));
     await writeFile(path, bytes);

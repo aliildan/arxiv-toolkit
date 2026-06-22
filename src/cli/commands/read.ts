@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ArxivClient } from "../../core/client.js";
 import type { PaperContent, ReadOptions } from "../../core/types.js";
-import { ArxivError, exitCodeFor } from "../../core/errors.js";
+import { handleCliError } from "../error.js";
 
 export interface ReadFlags {
   source?: "auto" | "html" | "pdf";
@@ -80,24 +80,6 @@ export async function runRead(
     }
     return 0;
   } catch (err) {
-    if (err instanceof ArxivError) {
-      const code = exitCodeFor(err);
-      if (opts.json) {
-        io.stderr(
-          JSON.stringify({ error: { code: err.code, message: err.message } }) + "\n",
-        );
-      } else {
-        io.stderr(`Error: ${err.message}\n`);
-        if (opts.verbose && err.stack) io.stderr(err.stack + "\n");
-      }
-      return code;
-    }
-    const msg = err instanceof Error ? err.message : String(err);
-    if (opts.json) {
-      io.stderr(JSON.stringify({ error: { code: "GENERIC", message: msg } }) + "\n");
-    } else {
-      io.stderr(`Error: ${msg}\n`);
-    }
-    return 1;
+    return handleCliError(err, opts, io);
   }
 }

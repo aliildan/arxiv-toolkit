@@ -61,13 +61,26 @@ async function withPage<T>(
 
 export class BrowserDataSource implements DataSource {
   private readonly importer?: PlaywrightImporter;
+  private launcher?: BrowserLauncher;
 
   constructor(opts?: BrowserDataSourceOptions) {
     this.importer = opts?.importer;
   }
 
+  /**
+   * Returns a cached BrowserLauncher, loading it on first use.
+   * A failed load is NOT cached (next call will retry).
+   */
+  private async getLauncher(): Promise<BrowserLauncher> {
+    if (!this.launcher) {
+      // loadChromium throws UnsupportedError on failure — do not cache failures
+      this.launcher = await loadChromium(this.importer);
+    }
+    return this.launcher;
+  }
+
   async query(url: string): Promise<string> {
-    const chromium = await loadChromium(this.importer);
+    const chromium = await this.getLauncher();
     return withPage(chromium, async (page) => {
       const resp = await page.goto(url, { waitUntil: "networkidle" });
       if (!resp) throw new NetworkError(`Browser navigation returned no response for ${url}`);
@@ -80,7 +93,7 @@ export class BrowserDataSource implements DataSource {
   }
 
   async getHtml(url: string): Promise<string | null> {
-    const chromium = await loadChromium(this.importer);
+    const chromium = await this.getLauncher();
     return withPage(chromium, async (page) => {
       const resp = await page.goto(url, { waitUntil: "networkidle" });
       if (!resp) throw new NetworkError(`Browser navigation returned no response for ${url}`);
@@ -94,7 +107,7 @@ export class BrowserDataSource implements DataSource {
   }
 
   async getPdf(url: string): Promise<Uint8Array> {
-    const chromium = await loadChromium(this.importer);
+    const chromium = await this.getLauncher();
     return withPage(chromium, async (page) => {
       const resp = await page.goto(url, { waitUntil: "networkidle" });
       if (!resp) throw new NetworkError(`Browser navigation returned no response for ${url}`);
@@ -109,7 +122,7 @@ export class BrowserDataSource implements DataSource {
   }
 
   async getText(url: string): Promise<string> {
-    const chromium = await loadChromium(this.importer);
+    const chromium = await this.getLauncher();
     return withPage(chromium, async (page) => {
       const resp = await page.goto(url, { waitUntil: "networkidle" });
       if (!resp) throw new NetworkError(`Browser navigation returned no response for ${url}`);

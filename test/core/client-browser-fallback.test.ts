@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ArxivClient } from "../../src/core/client.js";
 import type { DataSource } from "../../src/core/datasource/datasource.js";
 import {
@@ -148,5 +151,42 @@ describe("ArxivClient browser fallback in getContent", () => {
     // Second call should reuse the same browser instance (lazy init via ??=)
     await client.getContent("2310.06825", { source: "html" });
     expect(makeSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ArxivClient download browser fallback", () => {
+  it("uses the browser source when api.getPdf throws NetworkError and browserFallback is true", async () => {
+    const pdfBytes = new Uint8Array([37, 80, 68, 70, 45]); // %PDF-
+    const browser = happyBrowserSource();
+    // Override getPdf to return specific bytes
+    (browser.getPdf as ReturnType<typeof vi.fn>).mockResolvedValue(pdfBytes);
+
+    const client = clientWith(failingApiSource(), { browserFallback: true });
+    client.setFakeBrowser(browser);
+
+    const dir = await mkdtemp(join(tmpdir(), "arxiv-dl-browser-"));
+    try {
+      const out = await client.download("2310.06825", { dir });
+      expect(browser.getPdf).toHaveBeenCalled();
+      expect(out.bytes).toBe(pdfBytes.byteLength);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does NOT use the browser when browserFallback is false", async () => {
+    const browser = happyBrowserSource();
+    const client = clientWith(failingApiSource(), { browserFallback: false });
+    client.setFakeBrowser(browser);
+
+    const dir = await mkdtemp(join(tmpdir(), "arxiv-dl-nobrowser-"));
+    try {
+      await expect(client.download("2310.06825", { dir })).rejects.toMatchObject({
+        code: "NETWORK",
+      });
+      expect(browser.getPdf).not.toHaveBeenCalled();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -87,4 +87,33 @@ describe("BrowserDataSource", () => {
     expect(fakePage.close).toHaveBeenCalledTimes(1);
     expect(fakeBrowser.close).toHaveBeenCalledTimes(1);
   });
+
+  it("memoizes the launcher: importer is called only once across multiple method calls", async () => {
+    const { chromium } = makeFakeLauncher(FIXTURE_HTML, FIXTURE_PDF);
+    const importer = vi.fn().mockResolvedValue({ chromium });
+    const ds = new BrowserDataSource({ importer });
+    await ds.getHtml("https://arxiv.org/html/2310.06825");
+    await ds.getHtml("https://arxiv.org/html/2310.06825");
+    await ds.getPdf("https://arxiv.org/pdf/2310.06825.pdf");
+    expect(importer).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a failed import (next call retries)", async () => {
+    let callCount = 0;
+    const { chromium } = makeFakeLauncher(FIXTURE_HTML, FIXTURE_PDF);
+    const importer = vi.fn().mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) throw Object.assign(new Error("not found"), { code: "MODULE_NOT_FOUND" });
+      return { chromium };
+    });
+    const ds = new BrowserDataSource({ importer });
+    // First call fails
+    await expect(ds.getHtml("https://arxiv.org/html/2310.06825")).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+    // Second call should retry the importer (not use the cached failure)
+    const html = await ds.getHtml("https://arxiv.org/html/2310.06825");
+    expect(html).toBe(FIXTURE_HTML);
+    expect(importer).toHaveBeenCalledTimes(2);
+  });
 });

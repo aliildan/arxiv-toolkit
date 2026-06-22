@@ -2,8 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ArxivClient } from "../core/client.js";
 import type { DownloadOptions, Paper, PaperContent, ReadOptions, SearchParams, SearchResult } from "../core/types.js";
+import { VERSION } from "../core/version.js";
 
-export const VERSION = "0.1.0";
+export { VERSION };
 
 export type ToolResult = {
   content: Array<{ type: "text"; text: string } | { type: "resource_link"; uri: string; name: string }>;
