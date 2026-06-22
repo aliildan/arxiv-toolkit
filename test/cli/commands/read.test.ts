@@ -69,6 +69,27 @@ describe("buildReadOptions", () => {
     const opts = buildReadOptions({});
     expect(opts).toEqual({});
   });
+
+  it("filters Commander default 'auto' source → empty object", () => {
+    // Commander sets source="auto" when the user omits --source; that must be
+    // stripped so ArxivClient sees no source override.
+    expect(buildReadOptions({ source: "auto" })).toEqual({});
+  });
+
+  it("filters Commander default format 'markdown' but keeps non-default fields", () => {
+    // format="markdown" is the client default — omitting it is equivalent.
+    // section is NOT a default so it must survive.
+    expect(
+      buildReadOptions({ source: "auto", format: "markdown", section: "Intro" }),
+    ).toEqual({ section: "Intro" });
+  });
+
+  it("passes through non-default source and format unchanged", () => {
+    expect(buildReadOptions({ source: "html", format: "text" })).toEqual({
+      source: "html",
+      format: "text",
+    });
+  });
 });
 
 describe("formatReadJson", () => {
@@ -152,6 +173,24 @@ describe("runRead", () => {
     expect(out.join("")).toContain(outFile);
     const written = await readFile(outFile, "utf8");
     expect(written).toContain("## Introduction");
+  });
+
+  it("--out + --json writes the file AND stdout JSON contains path", async () => {
+    const client = {
+      getContent: vi.fn().mockResolvedValue(contentWithCursor),
+    } as unknown as ArxivClient;
+    const outFile = join(tmpDir, "paper-json.md");
+    const { out, io } = sink();
+    const code = await runRead(client, "1706.03762", { out: outFile, json: true }, io);
+    expect(code).toBe(0);
+    // File must exist and contain the paper text
+    const written = await readFile(outFile, "utf8");
+    expect(written).toContain("## Introduction");
+    // stdout JSON must include path and paging fields
+    const parsed = JSON.parse(out.join(""));
+    expect(parsed.path).toBe(outFile);
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.nextCursor).toBe(contentWithCursor.nextCursor);
   });
 
   it("maps NotFoundError to exit 2 with JSON error envelope when --json", async () => {

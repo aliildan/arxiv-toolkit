@@ -50,16 +50,30 @@ export async function runRead(
       for (const w of content.warnings) io.stderr(`Warning: ${w}\n`);
     }
 
-    if (opts.json) {
+    if (opts.out) {
+      // --out ALWAYS writes the formatted content file, regardless of --json.
+      const absPath = resolve(opts.out);
+      await writeFile(absPath, content.text, "utf8");
+      if (opts.json) {
+        // JSON mode + --out: emit envelope with path so callers know where the
+        // file landed, plus nextCursor/warnings for paging awareness.
+        const envelope: Record<string, unknown> = {
+          path: absPath,
+          truncated: content.truncated,
+        };
+        if (content.nextCursor !== undefined) envelope.nextCursor = content.nextCursor;
+        if (content.warnings !== undefined) envelope.warnings = content.warnings;
+        io.stdout(JSON.stringify(envelope, null, 2) + "\n");
+      } else {
+        io.stdout(`Saved to ${absPath}\n`);
+        if (content.nextCursor) {
+          io.stderr(`nextCursor: ${content.nextCursor}\n`);
+        }
+      }
+    } else if (opts.json) {
       io.stdout(formatReadJson(content) + "\n");
     } else {
-      if (opts.out) {
-        const absPath = resolve(opts.out);
-        await writeFile(absPath, content.text, "utf8");
-        io.stdout(`Saved to ${absPath}\n`);
-      } else {
-        io.stdout(content.text);
-      }
+      io.stdout(content.text);
       if (content.nextCursor) {
         io.stderr(`nextCursor: ${content.nextCursor}\n`);
       }
