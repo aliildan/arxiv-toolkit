@@ -6,8 +6,9 @@ import { ApiDataSource } from "./datasource/api.js";
 import { parseFeed } from "./parse/atom.js";
 import { normalizeId, htmlUrl, ar5ivUrl, pdfUrl, filenameFor, bibtexUrl } from "./ids.js";
 import { generateBibTeX } from "./bibtex.js";
-import { NotFoundError, ParseError, UnsupportedError, NetworkError } from "./errors.js";
+import { NotFoundError, ParseError, UnsupportedError, NetworkError, RateLimitedError } from "./errors.js";
 import type { DataSource } from "./datasource/datasource.js";
+import { BrowserDataSource } from "./datasource/browser.js";
 import type {
   ArxivConfig,
   SearchParams,
@@ -62,6 +63,41 @@ export class ArxivClient {
     this.cache = this.cfg.noCache ? undefined : new Cache(this.cfg.cacheDir);
     this.http = new Http(this.cfg, limiter); // structured caching is at the client level
     this.api = new ApiDataSource(this.http);
+  }
+
+  /** Override in tests to inject a fake browser DataSource without real playwright. */
+  protected makeBrowserSource(): DataSource {
+    return new BrowserDataSource();
+  }
+
+  private async htmlWithBrowserFallback(url: string): Promise<string | null> {
+    try {
+      return await this.api.getHtml(url);
+    } catch (err) {
+      if (
+        this.cfg.browserFallback &&
+        (err instanceof NetworkError || err instanceof RateLimitedError)
+      ) {
+        this.browser ??= this.makeBrowserSource();
+        return this.browser.getHtml(url);
+      }
+      throw err;
+    }
+  }
+
+  private async pdfWithBrowserFallback(url: string): Promise<Uint8Array> {
+    try {
+      return await this.api.getPdf(url);
+    } catch (err) {
+      if (
+        this.cfg.browserFallback &&
+        (err instanceof NetworkError || err instanceof RateLimitedError)
+      ) {
+        this.browser ??= this.makeBrowserSource();
+        return this.browser.getPdf(url);
+      }
+      throw err;
+    }
   }
 
   private buildQueryUrl(params: SearchParams): string {
@@ -169,7 +205,7 @@ export class ArxivClient {
     const warnings: string[] = [];
 
     const tryNative = async () => {
-      const html = await this.api.getHtml(htmlUrl(n)); // null on 404
+      const html = await this.htmlWithBrowserFallback(htmlUrl(n)); // null on 404
       if (html === null) return null;
       const parsed = parseNativeHtml(html);
       if (parsed.sections.length === 0) return null; // unexpected page => fall through
@@ -184,7 +220,7 @@ export class ArxivClient {
     const tryAr5iv = async () => {
       let html: string | null;
       try {
-        html = await this.api.getHtml(ar5ivUrl(n)); // null on 404
+        html = await this.htmlWithBrowserFallback(ar5ivUrl(n)); // null on 404
       } catch (err) {
         if (err instanceof NetworkError) return null; // network => fall through to PDF
         throw err;
@@ -202,7 +238,7 @@ export class ArxivClient {
     };
 
     const tryPdf = async () => {
-      const bytes = await this.api.getPdf(pdfUrl(n)); // throws NotFoundError on 404
+      const bytes = await this.pdfWithBrowserFallback(pdfUrl(n)); // throws NotFoundError on 404
       const parsed = await parsePdf(bytes);
       warnings.push(parsed.warning);
       return {
