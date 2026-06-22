@@ -1,14 +1,101 @@
+<div align="center">
+
 # arxiv-toolkit
 
-A TypeScript library exposed as a **CLI** (`arxiv`) and an **MCP server** (`arxiv-mcp`) for
-searching arXiv, fetching metadata, and reading papers as clean, section-aware Markdown
-(HTML → ar5iv → PDF fallback). API-first over arXiv's official endpoints, with a lazy
-browser fallback (off by default).
+### Search arXiv, read papers as clean Markdown, and run cited literature reviews — straight from your terminal or any MCP client.
 
-- **Search & discovery** — full-text and field-scoped search (title, author, abstract, category), boolean queries, sorting, pagination, and a "recent in a category" listing.
-- **Read full text** — section-aware Markdown (or plain text), chunkable via `maxChars`/`cursor` so an LLM can read large papers within a context budget.
-- **Metadata & export** — rich metadata for one or many IDs and BibTeX export (canonical arXiv endpoint, with an offline `@misc` generator fallback).
-- **Polite & portable** — per-host rate limiting, retry/backoff, aggressive caching, OS-native paths. No browser required.
+[![npm version](https://img.shields.io/npm/v/arxiv-toolkit?color=cb3837&logo=npm)](https://www.npmjs.com/package/arxiv-toolkit)
+[![npm downloads](https://img.shields.io/npm/dm/arxiv-toolkit?color=cb3837)](https://www.npmjs.com/package/arxiv-toolkit)
+[![node](https://img.shields.io/node/v/arxiv-toolkit?color=339933&logo=node.js&logoColor=white)](https://nodejs.org)
+[![MCP server](https://img.shields.io/badge/MCP-server-111?logo=anthropic&logoColor=white)](https://modelcontextprotocol.io)
+[![license: MIT](https://img.shields.io/npm/l/arxiv-toolkit?color=3b82f6)](./LICENSE)
+
+<a href="assets/literature-review-demo.gif"><img src="assets/literature-review-demo.gif" alt="The literature-review skill: scope the topic, search arXiv, read key papers, and synthesize a cited review." width="840"></a>
+
+<sub><b>The bundled <code>literature-review</code> skill in action</b> — scope → search → read → synthesize → cite, end to end.</sub>
+
+</div>
+
+---
+
+**arxiv-toolkit** is one ESM package that ships two ways to reach arXiv's official endpoints:
+
+- the **`arxiv` CLI** for humans and scripts, and
+- the **`arxiv-mcp` server** so any [MCP](https://modelcontextprotocol.io) client (Claude Code, Claude Desktop, …) can search, read, and cite papers as tools.
+
+API-first, polite by default, no browser required. Papers come back as **section-aware Markdown** (native HTML → ar5iv → PDF fallback) that's built to be read by an LLM within a context budget.
+
+## Why arxiv-toolkit
+
+|  |  |
+|---|---|
+| 🔎 **Search & discover** | Full-text and field-scoped search (title, author, abstract, category), boolean queries, sorting, pagination, and a "recent in a category" feed. |
+| 📄 **Read full text** | Section-aware Markdown or plain text, chunkable via `maxChars`/`cursor` so a model can walk a long paper section by section. |
+| 📚 **Metadata & BibTeX** | Rich metadata for one or many IDs, plus canonical BibTeX from arXiv (with an offline `@misc` fallback). |
+| 🤖 **MCP-native** | The same core exposed as five MCP tools — drop it into Claude Code and ask for a review. |
+| 🧠 **Literature-review skill** | A bundled Agent Skill that turns "review the literature on X" into a scoped, thematic, cited synthesis. |
+| 🪶 **Polite & portable** | Per-host rate limiting, retry/backoff, aggressive caching, OS-native paths. No browser dependency. |
+
+## Quick start
+
+```bash
+# one-off, no install
+npx -y --package arxiv-toolkit arxiv search "speculative decoding" --max 10
+
+# or install globally — both bins land on PATH
+npm install -g arxiv-toolkit
+arxiv read 2310.06825 --section "Method"
+arxiv get 2310.06825 --bibtex
+```
+
+Wire it into Claude Code as an MCP server and ask in natural language:
+
+```bash
+claude mcp add arxiv --scope user -- npx -y --package arxiv-toolkit arxiv-mcp
+```
+
+> *"Give me a literature review of speculative decoding for LLMs."*
+
+---
+
+## Literature reviews, end to end
+
+The repo ships an [Agent Skill](https://agentskills.io) — **`literature-review`** — that teaches Claude to do a focused, cited review on top of the MCP tools: **scope** the topic (depth + sub-areas), **search** (narrowing large result sets instead of deep-paging), **read** the key papers in chunks to respect the context budget, **synthesize by theme**, and **emit a BibTeX bibliography**.
+
+It starts by scoping the work with you, so it reads the *right* papers instead of burning dozens of calls:
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/1.png" alt="Scoping the review depth: quick orientation, standard, or exhaustive."></td>
+    <td width="50%"><img src="assets/2.png" alt="Choosing which senses of the topic to focus on."></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>1 · Pick a depth</b> — orientation, standard, or exhaustive.</sub></td>
+    <td align="center"><sub><b>2 · Pick the focus areas</b> — multi-select the threads that matter.</sub></td>
+  </tr>
+</table>
+
+…then searches, triages with BibTeX, reads targeted sections, and returns a synthesis organized by theme — with a comparison table and a references block, scaled to the depth you chose:
+
+<div align="center">
+  <img src="assets/5.png" alt="A synthesized review section with a benchmark comparison table and inline citations." width="840">
+  <br><sub><b>3 · A thematic synthesis</b> — comparison tables, inline citations, and a BibTeX bibliography.</sub>
+</div>
+
+### Install the skill
+
+Works with Claude Code, Claude Desktop, and the API:
+
+```bash
+# from a checkout of this repo …
+cp -r skills/literature-review ~/.claude/skills/
+# … or from a global npm install:
+cp -r "$(npm root -g)/arxiv-toolkit/skills/literature-review" ~/.claude/skills/
+```
+
+Register the `arxiv-mcp` server ([below](#mcp-server)), then just ask. The skill lives in [`skills/literature-review/`](./skills/literature-review/) (`SKILL.md` + an arXiv query-syntax reference) — read or adapt it freely.
+
+---
 
 ## Install
 
@@ -157,25 +244,6 @@ With a global install, use the bin directly:
 | `arxiv_read_paper` | Section-aware Markdown/text with `nextCursor` for chunked reads. |
 | `arxiv_list_recent` | Recent papers in a category. |
 | `arxiv_download` | Save a PDF; returns the absolute path + a `file://` resource link. |
-
-## Literature-review skill
-
-The repo ships an [Agent Skill](https://agentskills.io) — `literature-review` — that teaches Claude to do a focused, cited literature review on top of the MCP tools: scope the topic, search (narrowing large result sets instead of deep-paging), read the key papers in chunks to respect the context budget, synthesize by theme, and emit a BibTeX bibliography.
-
-Install it once (works with Claude Code, Claude Desktop, and the API):
-
-```bash
-# from a checkout of this repo …
-cp -r skills/literature-review ~/.claude/skills/
-# … or from a global npm install:
-cp -r "$(npm root -g)/arxiv-toolkit/skills/literature-review" ~/.claude/skills/
-```
-
-Register the `arxiv-mcp` server (above), then just ask Claude:
-
-> "Give me a literature review of speculative decoding for LLMs."
-
-The skill lives in [`skills/literature-review/`](./skills/literature-review/) (`SKILL.md` + an arXiv query-syntax reference) — read or adapt it freely.
 
 ## Browser fallback (off by default)
 
