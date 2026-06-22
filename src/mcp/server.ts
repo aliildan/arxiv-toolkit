@@ -173,7 +173,7 @@ export async function metadataHandler(client: ArxivClient, args: MetadataArgs): 
     const structured: { papers: Paper[]; bibtex?: string[] } = { papers };
     let text = `Metadata for ${papers.length} paper(s)\n` + papers.map((p) => `- ${p.id} — ${p.title}`).join("\n");
     if (args.bibtex) {
-      structured.bibtex = await Promise.all(args.ids.map((id) => client.toBibTeX(id)));
+      structured.bibtex = await Promise.all(papers.map((p) => client.toBibTeX(p.id)));
       text += `\n\nBibTeX:\n${structured.bibtex.join("\n\n")}`;
     }
     return { content: [{ type: "text", text }], structuredContent: structured };

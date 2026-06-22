@@ -1,6 +1,7 @@
 import type { ArxivClient } from "../../core/client.js";
 import type { Paper } from "../../core/types.js";
 import { ArxivError, exitCodeFor } from "../../core/errors.js";
+import { normalizeId } from "../../core/ids.js";
 
 export interface GetFlags {
   bibtex?: boolean;
@@ -66,7 +67,7 @@ export async function runGet(
         ids.map(async (id) => {
           try {
             const bib = await (client as ArxivClient).toBibTeX(id);
-            bibtex!.set(id, bib);
+            bibtex!.set(normalizeId(id).id, bib);
           } catch {
             // best-effort; do not fail the whole command if one bibtex fetch fails
           }

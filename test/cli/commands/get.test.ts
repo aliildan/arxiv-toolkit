@@ -135,6 +135,19 @@ describe("runGet", () => {
     expect(parsed.papers[0].bibtex).toBe(bibtexStr);
   });
 
+  it("bibtex map uses normalized id so versioned/URL inputs still match the returned paper", async () => {
+    const bibtexStr = "@misc{vaswani2017attention}";
+    const client = {
+      getPapers: vi.fn().mockResolvedValue([paper1]), // paper1.id === "1706.03762"
+      toBibTeX: vi.fn().mockResolvedValue(bibtexStr),
+    } as unknown as ArxivClient;
+    const { out, io } = sink();
+    // Pass a versioned id; paper returned has normalized id "1706.03762"
+    const code = await runGet(client, ["1706.03762v1"], { bibtex: true }, io);
+    expect(code).toBe(0);
+    expect(out.join("")).toContain(bibtexStr);
+  });
+
   it("maps NotFoundError to exit 2 with JSON error envelope when --json", async () => {
     const client = {
       getPapers: vi.fn().mockRejectedValue(new NotFoundError("not found")),

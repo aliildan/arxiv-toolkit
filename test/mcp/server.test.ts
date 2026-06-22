@@ -192,20 +192,34 @@ describe("metadataHandler", () => {
     expect((out.content[0] as { text: string }).text).toContain("2310.06825 — Mistral 7B");
   });
 
-  it("fetches bibtex per id when bibtex:true and includes it in structuredContent", async () => {
+  it("fetches bibtex from FOUND papers (not input ids), aligned 1:1 with papers array", async () => {
     const client = mockClient({
-      getPapers: vi.fn().mockResolvedValue([paper]),
+      getPapers: vi.fn().mockResolvedValue([paper]), // only one paper returned
       toBibTeX: vi.fn().mockResolvedValue("@misc{Jiang2023mistral, ...}"),
     });
-    const out = await metadataHandler(client, { ids: ["2310.06825", "1706.03762"], bibtex: true });
-    expect(client.toBibTeX).toHaveBeenCalledTimes(2);
-    expect(client.toBibTeX).toHaveBeenNthCalledWith(1, "2310.06825");
-    expect(client.toBibTeX).toHaveBeenNthCalledWith(2, "1706.03762");
+    // Pass two ids but only one paper is returned (simulates a not-found id)
+    const out = await metadataHandler(client, { ids: ["2310.06825", "9999.99999"], bibtex: true });
+    // toBibTeX called once per found paper (paper.id = "2310.06825"), NOT per input id
+    expect(client.toBibTeX).toHaveBeenCalledTimes(1);
+    expect(client.toBibTeX).toHaveBeenCalledWith("2310.06825");
+    expect(out.isError).toBeUndefined();
     expect(out.structuredContent).toEqual({
       papers: [paper],
-      bibtex: ["@misc{Jiang2023mistral, ...}", "@misc{Jiang2023mistral, ...}"],
+      bibtex: ["@misc{Jiang2023mistral, ...}"],
     });
     expect((out.content[0] as { text: string }).text).toContain("BibTeX:");
+  });
+
+  it("does not throw when a not-found id is excluded from results (bibtex aligned to found papers)", async () => {
+    const client = mockClient({
+      getPapers: vi.fn().mockResolvedValue([paper]), // only real paper returned
+      toBibTeX: vi.fn().mockResolvedValue("@misc{bib}"),
+    });
+    const out = await metadataHandler(client, { ids: ["9999.99999", "2310.06825"], bibtex: true });
+    expect(out.isError).toBeUndefined();
+    const structured = out.structuredContent as { papers: unknown[]; bibtex?: string[] };
+    expect(structured.papers).toHaveLength(1);
+    expect(structured.bibtex).toHaveLength(1);
   });
 
   it("returns isError on failure", async () => {
