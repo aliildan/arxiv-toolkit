@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { parseNativeHtml } from "./parse/html-native.js";
 import { parseAr5ivHtml } from "./parse/html-ar5iv.js";
 import { parsePdf } from "./parse/pdf.js";
+import { markdownToText } from "./parse/html-common.js";
 
 const API_QUERY_URL = "https://export.arxiv.org/api/query";
 const MAX_RESULTS_CLAMP = 2000;
@@ -287,15 +288,23 @@ export class ArxivClient {
       warnings: string[];
     },
   ): PaperContent {
+    const applyFormat = (content: string): string =>
+      opts.format === "text" ? markdownToText(content) : content;
+
+    const formattedSections: Section[] = chunk.map((s) => ({
+      ...s,
+      content: applyFormat(s.content),
+    }));
+
     return {
       id: n.id,
       version: n.version,
       source: full.source,
       format: opts.format,
       title: full.title,
-      abstract: full.abstract,
-      sections: chunk,
-      text: chunk.map((s) => s.content).join("\n\n"),
+      abstract: full.abstract !== undefined ? applyFormat(full.abstract) : undefined,
+      sections: formattedSections,
+      text: formattedSections.map((s) => s.content).join("\n\n"),
       truncated: opts.truncated,
       nextCursor: opts.nextCursor,
       warnings: opts.warnings.length > 0 ? opts.warnings : undefined,

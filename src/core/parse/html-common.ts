@@ -77,3 +77,58 @@ export function htmlFragmentToMarkdown(
   const service = td ?? makeTurndown();
   return service.turndown(html).trim();
 }
+
+/**
+ * Strip common Markdown syntax to produce readable plain text.
+ * - ATX headings: `## X` → `X`
+ * - Bold/italic/strikethrough: `**x**`, `*x*`, `_x_`, `~~x~~` → `x`
+ * - Inline code/backticks: `` `x` `` → `x`
+ * - Links: `[text](url)` → `text`
+ * - Images: `![alt](url)` → `alt`
+ * - Blockquotes: strips `> ` prefixes
+ * - List markers: `- `, `* `, `1. ` → item text kept
+ * - Math `$…$`/`$$…$$` and table pipes left as-is (simple and deterministic)
+ * - Excess blank lines collapsed to at most one blank line
+ */
+export function markdownToText(md: string): string {
+  let text = md;
+
+  // ATX headings: strip leading `#` chars and optional trailing `#`
+  text = text.replace(/^#{1,6}\s+(.+?)(?:\s+#+)?$/gm, "$1");
+
+  // Images: ![alt](url) → alt  (must come before links)
+  text = text.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+
+  // Links: [text](url) → text
+  text = text.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
+
+  // Strikethrough: ~~x~~ → x
+  text = text.replace(/~~(.+?)~~/g, "$1");
+
+  // Bold+italic: ***x*** or ___x___ → x  (handle longest first)
+  text = text.replace(/\*{3}(.+?)\*{3}/g, "$1");
+  text = text.replace(/_{3}(.+?)_{3}/g, "$1");
+
+  // Bold: **x** or __x__ → x
+  text = text.replace(/\*{2}(.+?)\*{2}/g, "$1");
+  text = text.replace(/_{2}(.+?)_{2}/g, "$1");
+
+  // Italic: *x* or _x_ → x  (single char boundary avoids touching math $x$)
+  text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1");
+  text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, "$1");
+
+  // Inline code: `x` → x  (but NOT $$…$$ or $…$ — leave math alone)
+  text = text.replace(/`([^`]+)`/g, "$1");
+
+  // Blockquotes: strip leading `> ` on each line
+  text = text.replace(/^>\s?/gm, "");
+
+  // List markers: unordered `- ` / `* ` and ordered `1. ` etc.
+  text = text.replace(/^(\s*)[-*]\s+/gm, "$1");
+  text = text.replace(/^(\s*)\d+\.\s+/gm, "$1");
+
+  // Collapse 3+ consecutive blank lines to a single blank line
+  text = text.replace(/\n{3,}/g, "\n\n");
+
+  return text.trim();
+}

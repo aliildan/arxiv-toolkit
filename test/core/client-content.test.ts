@@ -198,6 +198,54 @@ describe("getContent cursor round-trip", () => {
   });
 });
 
+describe("getContent format option", () => {
+  it("default (markdown) returns sections with Markdown heading/bold/link syntax", async () => {
+    const client = clientWith({
+      getHtml: async (url) => (url.includes("/html/") ? NATIVE : null),
+    });
+    const res = await client.getContent("2310.06825");
+    expect(res.format).toBe("markdown");
+    // Markdown content should contain at least some of the typical markdown markers
+    // The native fixture section content is already rendered to markdown via htmlFragmentToMarkdown
+    const allContent = res.sections.map((s) => s.content).join("\n\n");
+    // text field should match joined sections
+    expect(res.text).toBe(allContent);
+  });
+
+  it("format:text strips Markdown heading/bold/link syntax from sections and text", async () => {
+    const client = clientWith({
+      getHtml: async (url) => (url.includes("/html/") ? NATIVE : null),
+    });
+    const res = await client.getContent("2310.06825", { format: "text" });
+    expect(res.format).toBe("text");
+    // No ATX heading markers
+    expect(res.text).not.toMatch(/^#{1,6}\s/m);
+    // No bold markers
+    expect(res.text).not.toContain("**");
+    // No link syntax
+    expect(res.text).not.toContain("](");
+    // sections content should also be stripped
+    for (const s of res.sections) {
+      expect(s.content).not.toMatch(/^#{1,6}\s/m);
+      expect(s.content).not.toContain("**");
+      expect(s.content).not.toContain("](");
+    }
+    // text field is consistent with sections
+    expect(res.text).toBe(res.sections.map((s) => s.content).join("\n\n"));
+  });
+
+  it("format:text applied to PDF source is harmless (PDF content is already plain)", async () => {
+    const client = clientWith({ getHtml: async () => null });
+    const res = await client.getContent("hep-th/9901001", { format: "text" });
+    expect(res.format).toBe("text");
+    expect(res.source).toBe("pdf");
+    // PDF content should still contain the expected text
+    expect(res.text).toContain("super-symmetry");
+    // no heading markers expected (PDF is already plain text)
+    expect(res.text).not.toMatch(/^#{1,6}\s/m);
+  });
+});
+
 describe("download", () => {
   let dir: string;
   beforeEach(async () => {

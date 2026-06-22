@@ -1,7 +1,6 @@
 import { NotFoundError, RateLimitedError, NetworkError } from "./errors.js";
 import type { ArxivConfig } from "./types.js";
 import type { RateLimiter } from "./rate-limit.js";
-import type { Cache } from "./cache.js";
 
 const hostnameOf = (url: string): string => new URL(url).hostname;
 
@@ -32,12 +31,10 @@ const backoffMs = (attempt: number): number => {
 export class Http {
   private readonly cfg: ArxivConfig;
   private readonly limiter: RateLimiter;
-  private readonly cache?: Cache;
 
-  constructor(cfg: ArxivConfig, limiter: RateLimiter, cache?: Cache) {
+  constructor(cfg: ArxivConfig, limiter: RateLimiter) {
     this.cfg = cfg;
     this.limiter = limiter;
-    this.cache = cache;
   }
 
   private async fetchWithRetry(url: string, accept: string): Promise<Response> {

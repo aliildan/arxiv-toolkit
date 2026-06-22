@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -54,4 +54,16 @@ describe("build output", () => {
     );
     expect(head).not.toBe(SHEBANG);
   });
+
+  it(
+    "dist/index.js exports ArxivClient and normalizeId as named exports",
+    async () => {
+      const distIndexUrl = pathToFileURL(resolve(distDir, "index.js")).href;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mod = await import(distIndexUrl) as Record<string, unknown>;
+      expect(typeof mod.ArxivClient).toBe("function");
+      expect(typeof mod.normalizeId).toBe("function");
+    },
+    30000,
+  );
 });

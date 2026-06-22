@@ -4,6 +4,7 @@ import TurndownService from "turndown";
 import {
   makeTurndown,
   htmlFragmentToMarkdown,
+  markdownToText,
 } from "../../../src/core/parse/html-common.js";
 
 describe("turndown-plugin-gfm ESM interop (smoke test)", () => {
@@ -80,5 +81,105 @@ describe("htmlFragmentToMarkdown", () => {
     const b = htmlFragmentToMarkdown("<p>two</p>", td);
     expect(a).toBe("one");
     expect(b).toBe("two");
+  });
+});
+
+describe("markdownToText", () => {
+  it("strips ATX headings and preserves heading text", () => {
+    const md = "## Introduction\n\nSome text.";
+    const text = markdownToText(md);
+    expect(text).not.toContain("#");
+    expect(text).toContain("Introduction");
+    expect(text).toContain("Some text.");
+  });
+
+  it("strips bold markers and preserves content", () => {
+    const md = "This is **bold** text and __also bold__.";
+    const text = markdownToText(md);
+    expect(text).not.toContain("**");
+    expect(text).not.toContain("__");
+    expect(text).toContain("bold");
+  });
+
+  it("strips italic markers and preserves content", () => {
+    const md = "This is *italic* and _also italic_.";
+    const text = markdownToText(md);
+    expect(text).not.toContain("*italic*");
+    expect(text).not.toContain("_also italic_");
+    expect(text).toContain("italic");
+  });
+
+  it("converts links to link text only", () => {
+    const md = "See [the paper](http://arxiv.org/abs/1234) for details.";
+    const text = markdownToText(md);
+    expect(text).not.toContain("](");
+    expect(text).not.toContain("http://arxiv.org");
+    expect(text).toContain("the paper");
+  });
+
+  it("converts images to alt text", () => {
+    const md = "![Figure 1](http://example.com/fig1.png)";
+    const text = markdownToText(md);
+    expect(text).not.toContain("![");
+    expect(text).toContain("Figure 1");
+  });
+
+  it("strips unordered list markers and keeps item text", () => {
+    const md = "- item one\n- item two\n* item three";
+    const text = markdownToText(md);
+    expect(text).not.toMatch(/^[-*]\s/m);
+    expect(text).toContain("item one");
+    expect(text).toContain("item two");
+    expect(text).toContain("item three");
+  });
+
+  it("strips ordered list markers and keeps item text", () => {
+    const md = "1. first\n2. second\n3. third";
+    const text = markdownToText(md);
+    expect(text).not.toMatch(/^\d+\.\s/m);
+    expect(text).toContain("first");
+    expect(text).toContain("second");
+  });
+
+  it("strips inline code backticks", () => {
+    const md = "Use `npm install` to install.";
+    const text = markdownToText(md);
+    expect(text).not.toContain("`");
+    expect(text).toContain("npm install");
+  });
+
+  it("strips blockquote prefixes", () => {
+    const md = "> This is a quote.\n> Second line.";
+    const text = markdownToText(md);
+    expect(text).not.toContain("> ");
+    expect(text).toContain("This is a quote.");
+  });
+
+  it("handles a mixed sample with heading, bold, link, and list item", () => {
+    const md = "## Results\n\n**Key finding**: see [paper](http://x.com).\n\n- item one";
+    const text = markdownToText(md);
+    expect(text).not.toContain("#");
+    expect(text).not.toContain("**");
+    expect(text).not.toContain("](");
+    expect(text).not.toMatch(/^-\s/m);
+    expect(text).toContain("Results");
+    expect(text).toContain("Key finding");
+    expect(text).toContain("paper");
+    expect(text).toContain("item one");
+  });
+
+  it("leaves math $…$ and $$…$$ intact", () => {
+    const md = "Energy $E = mc^2$ and\n\n$$\\int_0^1 x\\,dx = \\frac{1}{2}$$";
+    const text = markdownToText(md);
+    expect(text).toContain("$E = mc^2$");
+    expect(text).toContain("$$\\int_0^1 x\\,dx = \\frac{1}{2}$$");
+  });
+
+  it("collapses excess blank lines", () => {
+    const md = "line one\n\n\n\nline two";
+    const text = markdownToText(md);
+    expect(text).not.toMatch(/\n{3,}/);
+    expect(text).toContain("line one");
+    expect(text).toContain("line two");
   });
 });
