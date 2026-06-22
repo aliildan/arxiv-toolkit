@@ -4,6 +4,16 @@ import { ArxivClient } from "../core/client.js";
 import type { ArxivConfig } from "../core/types.js";
 import { runSearch } from "./commands/search.js";
 import type { SearchFlags } from "./commands/search.js";
+import { runGet } from "./commands/get.js";
+import type { GetFlags } from "./commands/get.js";
+import { runRead } from "./commands/read.js";
+import type { ReadFlags } from "./commands/read.js";
+import { runRecent } from "./commands/recent.js";
+import type { RecentFlags } from "./commands/recent.js";
+import { runDownload } from "./commands/download.js";
+import type { DownloadFlags } from "./commands/download.js";
+import { runCache } from "./commands/cache.js";
+import type { CacheAction } from "./commands/cache.js";
 
 export const VERSION = "0.1.0";
 
@@ -80,6 +90,7 @@ export function createProgram(deps: CliDeps = {}): Command {
   addCommonOptions(program);
   program.exitOverride();
 
+  // --- search ---
   const search = program.command("search [query]");
   search.description("Search arXiv papers");
   addCommonOptions(search);
@@ -113,6 +124,115 @@ export function createProgram(deps: CliDeps = {}): Command {
       verbose: globalFlags.verbose,
     };
     const code = await runSearch(client, query, flags, io);
+    exit(code);
+  });
+
+  // --- get ---
+  const get = program.command("get <id...>");
+  get.description("Fetch metadata for one or more arXiv IDs");
+  addCommonOptions(get);
+  get.option("--bibtex", "Also fetch BibTeX for each ID");
+
+  get.action(async function (ids: string[], opts: RawOpts) {
+    const globalFlags = mergeGlobal(program.opts(), opts);
+    const client = createClient(globalFlags);
+    const flags: GetFlags = {
+      bibtex: opts.bibtex as boolean | undefined,
+      json: globalFlags.json,
+      quiet: globalFlags.quiet,
+      verbose: globalFlags.verbose,
+    };
+    const code = await runGet(client, ids, flags, io);
+    exit(code);
+  });
+
+  // --- read ---
+  const read = program.command("read <id>");
+  read.description("Read the full text of an arXiv paper");
+  addCommonOptions(read);
+  read.addOption(
+    new Option("--source <src>", "Content source")
+      .default("auto")
+      .choices(["auto", "html", "pdf"]),
+  );
+  read.addOption(
+    new Option("--format <fmt>", "Output format")
+      .default("markdown")
+      .choices(["markdown", "text"]),
+  );
+  read.option("--section <name>", "Return a single named section");
+  read.option("--max-chars <n>", "Soft chunk character target", (v: string) => Number(v));
+  read.option("--out <file>", "Write output to a file instead of stdout");
+
+  read.action(async function (id: string, opts: RawOpts) {
+    const globalFlags = mergeGlobal(program.opts(), opts);
+    const client = createClient(globalFlags);
+    const flags: ReadFlags = {
+      source: opts.source as ReadFlags["source"],
+      format: opts.format as ReadFlags["format"],
+      section: opts.section as string | undefined,
+      maxChars: opts.maxChars as number | undefined,
+      out: opts.out as string | undefined,
+      json: globalFlags.json,
+      quiet: globalFlags.quiet,
+      verbose: globalFlags.verbose,
+    };
+    const code = await runRead(client, id, flags, io);
+    exit(code);
+  });
+
+  // --- recent ---
+  const recent = program.command("recent <category>");
+  recent.description("List the most recent papers in an arXiv category");
+  addCommonOptions(recent);
+  recent.option("--max <n>", "Maximum results", (v: string) => Number(v));
+
+  recent.action(async function (category: string, opts: RawOpts) {
+    const globalFlags = mergeGlobal(program.opts(), opts);
+    const client = createClient(globalFlags);
+    const flags: RecentFlags = {
+      max: opts.max as number | undefined,
+      json: globalFlags.json,
+      quiet: globalFlags.quiet,
+      verbose: globalFlags.verbose,
+    };
+    const code = await runRecent(client, category, flags, io);
+    exit(code);
+  });
+
+  // --- download ---
+  const download = program.command("download <id...>");
+  download.description("Download PDF(s) for one or more arXiv IDs");
+  addCommonOptions(download);
+  download.option("--out <dir>", "Directory to save PDFs (default: configured downloads dir)");
+
+  download.action(async function (ids: string[], opts: RawOpts) {
+    const globalFlags = mergeGlobal(program.opts(), opts);
+    const client = createClient(globalFlags);
+    const flags: DownloadFlags = {
+      out: opts.out as string | undefined,
+      json: globalFlags.json,
+      quiet: globalFlags.quiet,
+      verbose: globalFlags.verbose,
+    };
+    const code = await runDownload(client, ids, flags, io);
+    exit(code);
+  });
+
+  // --- cache ---
+  // The cache command does NOT construct an ArxivClient; it calls runCache with
+  // the cacheDir resolved from the global --cache-dir flag (or env/config defaults).
+  const cache = program.command("cache <action>");
+  cache.description("Cache maintenance: 'path' prints the cache dir, 'clear' empties it");
+
+  // cache does not call addCommonOptions — it only needs --cache-dir from the
+  // global program options, which are already registered on the root program.
+  // However, commander inherits the parent's parsed global opts via program.opts(),
+  // so the --cache-dir value is available as program.opts().cacheDir inside the action.
+
+  cache.action(async function (action: string, _opts: RawOpts) {
+    const globalFlags = mergeGlobal(program.opts(), {});
+    const code = await runCache(action as CacheAction, { cacheDir: globalFlags.cacheDir }, io);
     exit(code);
   });
 

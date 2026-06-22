@@ -116,4 +116,102 @@ describe("cli index", () => {
     const c = defaultClientFactory({ noCache: true, cacheDir: "/tmp/c", browser: true });
     expect(c).toBeInstanceOf(ArxivClient);
   });
+
+  it("createProgram registers all six commands", () => {
+    const program = createProgram();
+    const names = program.commands.map((c) => c.name());
+    expect(names).toContain("search");
+    expect(names).toContain("get");
+    expect(names).toContain("read");
+    expect(names).toContain("recent");
+    expect(names).toContain("download");
+    expect(names).toContain("cache");
+  });
+
+  it("get command calls getPapers and prints JSON", async () => {
+    const mockClient = {
+      getPapers: vi.fn().mockResolvedValue([paper]),
+    } as unknown as ArxivClient;
+    const out = sink();
+    const err = sink();
+    const code = await run(["get", "1706.03762", "--json"], {
+      createClient: () => mockClient,
+      stdout: out.io,
+      stderr: err.io,
+    });
+    expect(code).toBe(0);
+    expect(mockClient.getPapers).toHaveBeenCalledWith(["1706.03762"]);
+    const parsed = JSON.parse(out.buf.join(""));
+    expect(parsed.papers[0].id).toBe("1706.03762");
+  });
+
+  it("read command calls getContent and streams text to stdout", async () => {
+    const content = {
+      id: "1706.03762",
+      version: 1,
+      source: "html-native" as const,
+      format: "markdown" as const,
+      title: "Attention Is All You Need",
+      sections: [{ id: "S1", title: "Introduction", level: 1, content: "## Intro" }],
+      text: "## Introduction\n\nWe propose...",
+      truncated: false,
+    };
+    const mockClient = {
+      getContent: vi.fn().mockResolvedValue(content),
+    } as unknown as ArxivClient;
+    const out = sink();
+    const code = await run(["read", "1706.03762"], {
+      createClient: () => mockClient,
+      stdout: out.io,
+      stderr: sink().io,
+    });
+    expect(code).toBe(0);
+    expect(mockClient.getContent).toHaveBeenCalledWith("1706.03762", {});
+    expect(out.buf.join("")).toContain("## Introduction");
+  });
+
+  it("recent command calls client.recent with category and prints JSON", async () => {
+    const recentResult: SearchResult = { total: 1, start: 0, count: 1, papers: [paper] };
+    const mockClient = {
+      recent: vi.fn().mockResolvedValue(recentResult),
+    } as unknown as ArxivClient;
+    const out = sink();
+    const code = await run(["recent", "cs.CL", "--json"], {
+      createClient: () => mockClient,
+      stdout: out.io,
+      stderr: sink().io,
+    });
+    expect(code).toBe(0);
+    expect(mockClient.recent).toHaveBeenCalledWith("cs.CL", {});
+    expect(JSON.parse(out.buf.join(""))).toEqual(recentResult);
+  });
+
+  it("download command calls client.download and prints paths", async () => {
+    const mockClient = {
+      download: vi.fn().mockResolvedValue({ path: "/papers/1706.03762v1.pdf", bytes: 1024 }),
+    } as unknown as ArxivClient;
+    const out = sink();
+    const code = await run(["download", "1706.03762"], {
+      createClient: () => mockClient,
+      stdout: out.io,
+      stderr: sink().io,
+    });
+    expect(code).toBe(0);
+    expect(mockClient.download).toHaveBeenCalledWith("1706.03762", {});
+    expect(out.buf.join("")).toContain("/papers/1706.03762v1.pdf");
+  });
+
+  it("cache path command prints the cache dir without creating a client", async () => {
+    // createClient should NOT be called for cache commands
+    const createClient = vi.fn().mockReturnValue({ getPapers: vi.fn() } as unknown as ArxivClient);
+    const out = sink();
+    const code = await run(["--cache-dir", "/tmp/testcache", "cache", "path"], {
+      createClient,
+      stdout: out.io,
+      stderr: sink().io,
+    });
+    expect(code).toBe(0);
+    expect(out.buf.join("").trim()).toBe("/tmp/testcache");
+    expect(createClient).not.toHaveBeenCalled();
+  });
 });

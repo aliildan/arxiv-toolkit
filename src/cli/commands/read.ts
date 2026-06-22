@@ -22,8 +22,11 @@ export interface ReadIo {
 
 export function buildReadOptions(opts: ReadFlags): ReadOptions {
   const o: ReadOptions = {};
-  if (opts.source !== undefined) o.source = opts.source;
-  if (opts.format !== undefined) o.format = opts.format;
+  // Only pass source/format if they diverge from the ArxivClient's own defaults
+  // ("auto" and "markdown" are the client's natural defaults — omitting them is
+  // equivalent, and it keeps the opts object empty when the user didn't specify).
+  if (opts.source !== undefined && opts.source !== "auto") o.source = opts.source;
+  if (opts.format !== undefined && opts.format !== "markdown") o.format = opts.format;
   if (opts.section !== undefined) o.section = opts.section;
   if (opts.maxChars !== undefined) o.maxChars = opts.maxChars;
   return o;
